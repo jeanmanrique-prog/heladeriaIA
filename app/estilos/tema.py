@@ -78,11 +78,27 @@ def get_tema(dark: bool) -> dict:
 def aplicar_css_global(t: dict) -> None:
     """Inyecta el CSS según si es administrador (oscuro) o cliente (claro/mockup)."""
     
+    # Intentar forzar el tema de Streamlit mediante JS (si el navegador lo permite)
+    tema_js = "dark" if t.get('IS_REPO_ADMIN') else "light"
+    st.components.v1.html(f"""
+        <script>
+            window.parent.document.documentElement.setAttribute('data-theme', '{tema_js}');
+            window.parent.document.body.setAttribute('data-theme', '{tema_js}');
+        </script>
+    """, height=0)
+
     if t.get('IS_REPO_ADMIN', False):
         # MODO ADMIN: ESTILO OSCURO DE AYER
         st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Permanent+Marker&display=swap');
+
+:root {{
+    --background-color: {t['BG']};
+    --secondary-background-color: {t['BG2']};
+    --text-color: {t['TEXT']};
+    --primary-color: {t['ACCENT']};
+}}
 
 html, body, [data-testid="stAppViewContainer"] {{ background-color: {t['BG']} !important; font-family: 'Nunito', sans-serif !important; }}
 [data-testid="stSidebar"] {{ background-color: {t['SIDEBAR_BG']} !important; border-right: 2px solid {t['SIDEBAR_BDR']} !important; }}
@@ -121,6 +137,13 @@ hr {{ border-color:{t['HR']} !important; border-width:1.5px !important; }}
         st.markdown(f"""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
+
+    :root {{
+        --background-color: #FFFFFF;
+        --secondary-background-color: #FFF5F7;
+        --text-color: #31333F;
+        --primary-color: #FF3366;
+    }}
 
     html, body, [data-testid="stAppViewContainer"] {{ background-color: #FFFFFF !important; font-family: 'Nunito', sans-serif !important; }}
     h1, h2, h3, h4, h5, h6, p, span, label, div {{ font-family: 'Nunito', sans-serif; color: #31333F !important; }}
