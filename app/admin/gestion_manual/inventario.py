@@ -1,31 +1,69 @@
 """
 app/admin/gestion_manual/inventario.py
-──────────────────────────────────────
-Gestión de stock y registro de entradas de inventario (Versión Compacta).
+Gestion de stock y registro de entradas de inventario.
 """
 
-import streamlit as st
+import base64
+import html
 from pathlib import Path
+
+import streamlit as st
+
 from utils.peticiones import APIClient
 
+
 def render_inventario(api_ok: bool, theme: dict):
-    """Renderiza la página de inventario con pestañas para ver y agregar stock."""
-    # Estilos para uniformidad de tarjetas de inventario COMPACTO
-    st.markdown(f"""
+    """Renderiza la pagina de inventario con pestanas para ver y agregar stock."""
+    st.markdown(
+        f"""
         <style>
         .inventory-card {{
             background: {theme['BG2']};
             border-radius: 12px;
-            padding: 10px;
+            padding: 14px 12px;
             border: 1px solid rgba(255,255,255,0.05);
-            height: 280px; /* Reducido de 420px */
+            min-height: 280px;
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
+            justify-content: flex-start;
+            align-items: center;
+            gap: 10px;
             margin-bottom: 15px;
         }}
+        .inventory-card__media {{
+            width: 100%;
+            height: 150px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+        .inventory-card__media img {{
+            display: block;
+            max-width: 100%;
+            max-height: 150px;
+            margin: 0 auto;
+            object-fit: contain;
+        }}
+        .inventory-card__title {{
+            min-height: 2.8em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }}
+        .inventory-card__title h5 {{
+            margin: 0;
+            font-size: 0.95rem;
+            line-height: 1.35;
+        }}
+        .inventory-card__stock {{
+            margin-top: auto;
+            text-align: center;
+        }}
         </style>
-    """, unsafe_allow_html=True)
+        """,
+        unsafe_allow_html=True,
+    )
 
     st.markdown("<h1>Inventario 📦</h1>", unsafe_allow_html=True)
 
@@ -41,51 +79,60 @@ def render_inventario(api_ok: bool, theme: dict):
     with tab_entrada:
         _render_entrada_stock()
 
-def _render_stock_grid(t):
+
+def _render_stock_grid(theme: dict):
     inv_data = APIClient.obtener_inventario()
     if not inv_data:
         st.info("Cargando inventario...")
         return
-        
+
     st.markdown('<div class="section-title">Niveles de Stock</div>', unsafe_allow_html=True)
-    # 4 columnas para modo compacto
     grid = st.columns(4)
     for idx, item in enumerate(inv_data["inventario"]):
         with grid[idx % 4]:
-            _render_item_card(item, t)
+            _render_item_card(item, theme)
 
-def _render_item_card(item, t):
-    sabor = str(item.get('sabor', '')).strip().lower()
-    
-    st.markdown('<div class="inventory-card">', unsafe_allow_html=True)
-    
-    # Imagen de producto (más pequeña)
-    _render_producto_img(sabor, t)
-    
-    # Detalles
-    st.markdown(f"""
-        <div style="text-align: center;">
-            <h5 style="margin: 5px 0; font-size: 0.95rem;">{item['nombre_producto']}</h5>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    color = t['COLOR_OK'] if not item['alerta_stock'] else t['COLOR_ALERTA']
-    st.markdown(f"""
-        <div style="text-align: center; margin-bottom: 5px;">
-            <span style='color:{color}; font-size:1.4rem; font-weight:900;'>{item['stock']} L</span>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
 
-def _render_producto_img(sabor, t):
+def _render_item_card(item: dict, theme: dict):
+    sabor = str(item.get("sabor", "")).strip().lower()
+    nombre = html.escape(str(item["nombre_producto"]))
+    color = theme["COLOR_OK"] if not item["alerta_stock"] else theme["COLOR_ALERTA"]
+
+    st.markdown(
+        f"""
+        <div class="inventory-card">
+            {_render_producto_img_markup(sabor, theme)}
+            <div class="inventory-card__title">
+                <h5>{nombre}</h5>
+            </div>
+            <div class="inventory-card__stock">
+                <span style="color:{color}; font-size:1.4rem; font-weight:900;">{item['stock']} L</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_producto_img_markup(sabor: str, theme: dict) -> str:
     root_dir = Path(__file__).resolve().parent.parent.parent.parent
     path = root_dir / "imagenes" / f"{sabor}-oscuro.png"
+
     if path.exists():
-        # Imagen compacta
-        st.image(str(path), use_container_width=True)
-    else:
-        st.markdown(f"<div style='height:80px; display:flex; align-items:center; justify-content:center; background:{t['BG']}; border-radius:12px; font-size:1.5rem;'>🍨</div>", unsafe_allow_html=True)
+        img_b64 = base64.b64encode(path.read_bytes()).decode()
+        return (
+            '<div class="inventory-card__media">'
+            f'<img src="data:image/png;base64,{img_b64}" alt="{html.escape(sabor)}">'
+            "</div>"
+        )
+
+    return (
+        '<div class="inventory-card__media">'
+        f"<div style='height:100%; width:100%; display:flex; align-items:center; justify-content:center; "
+        f"background:{theme['BG']}; border-radius:12px; font-size:1.5rem;'>🍨</div>"
+        "</div>"
+    )
+
 
 def _render_entrada_stock():
     st.markdown("### ➕ Registrar Entrada")
@@ -95,9 +142,11 @@ def _render_entrada_stock():
         sel = st.selectbox("Producto", list(prods.keys()))
         cant = st.number_input("Litros a ingresar", min_value=1, value=10)
         motivo = st.text_input("Motivo", value="Reposición de stock")
-        
+
         if st.button("📥 Registrar"):
-            res = APIClient.entrada_inventario({"id_producto": prods[sel], "cantidad": cant, "motivo": motivo})
+            res = APIClient.entrada_inventario(
+                {"id_producto": prods[sel], "cantidad": cant, "motivo": motivo}
+            )
             if res:
                 st.success("Stock actualizado correctamente")
                 st.rerun()

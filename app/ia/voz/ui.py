@@ -34,13 +34,20 @@ def render_realtime_call(theme: dict):
             b64_av = base64.b64encode(f.read()).decode()
         avatar_src = f'data:image/png;base64,{b64_av}'
 
-    # Imagen lateral (Urban Comiendo)
-    urban_path = images_dir / "urban_comiendo.png"
+    # Imagen lateral segun el rol actual
+    urban_name = "urban_admin.png" if st.session_state.role == "admin" else "urban_comiendo.png"
+    urban_path = images_dir / urban_name
     urban_src = ""
     if urban_path.exists():
         with open(urban_path, "rb") as f:
             b64_u = base64.b64encode(f.read()).decode()
         urban_src = f'data:image/png;base64,{b64_u}'
+    else:
+        fallback_path = images_dir / "urban_comiendo.png"
+        if fallback_path.exists():
+            with open(fallback_path, "rb") as f:
+                b64_u = base64.b64encode(f.read()).decode()
+            urban_src = f'data:image/png;base64,{b64_u}'
 
     saved_sid = st.session_state.get("_voz_session_id") or ""
     is_fresh = not st.session_state.get("call_greeted", False)
