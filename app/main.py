@@ -1,0 +1,122 @@
+"""
+app/main.py
+───────────
+Router principal de la aplicación Gelateria Urbana.
+"""
+
+import streamlit as st
+import base64
+import sys
+from pathlib import Path
+
+# Agregar el directorio raíz al path para que reconozca los módulos de mcp/
+root_path = str(Path(__file__).resolve().parent.parent)
+if root_path not in sys.path:
+    sys.path.append(root_path)
+
+# Utilidades y Gestión de Estado (Rutas locales para Streamlit)
+
+from utils.session_manager import SessionManager
+from utils.peticiones import APIClient
+from utils.formatters import corregir_mojibake
+
+# Estilos y Tema
+from estilos.tema import get_tema, aplicar_css_global
+
+# Componentes Globales
+from componentes.sidebar import render_sidebar
+
+# Páginas de Administrador
+from admin.gestion_manual.dashboard import render_dashboard
+from admin.gestion_manual.inventario import render_inventario
+from admin.gestion_manual.ventas import render_ventas
+from admin.gestion_manual.movimientos import render_movimientos
+from admin.ia import render_ia_admin
+
+# Páginas de Cliente
+from cliente.compra_manual.comprar import render_comprar
+from cliente.ia import render_ia_cliente
+
+# ──────────────────────────────────────────────────────────
+# CONFIGURACIÓN DE PÁGINA
+# ──────────────────────────────────────────────────────────
+
+st.set_page_config(
+    page_title="Gelateria Urbana | Street Style",
+    page_icon="🍦",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+def render_conocenos(theme):
+    """Página especial 'Conócenos' con imagen inmersiva."""
+    img_path = Path(__file__).resolve().parent.parent / "imagenes" / "sobre_nosotros.png"
+    if img_path.exists():
+        with open(img_path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode()
+        st.markdown(f"""
+            <style>
+            [data-testid="stMain"] {{ padding: 0 !important; }}
+            .about-wrapper {{ width: 100%; background: {theme['BG']}; }}
+            .about-image {{ width: 100%; display: block; }}
+            </style>
+            <div class="about-wrapper">
+                <img src="data:image/png;base64,{b64}" class="about-image">
+            </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.info("Nuestra historia se está escribiendo... 🍦")
+
+# ──────────────────────────────────────────────────────────
+# PUNTO DE ENTRADA (ROUTER)
+# ──────────────────────────────────────────────────────────
+
+def main():
+    # 1. Inicializar Estado Global
+    SessionManager.initialize()
+    
+    # 2. Determinar Tema (Admin: Dark / Cliente: Light)
+    is_admin = st.session_state.role == "admin"
+    theme = get_tema(is_admin)
+    st.session_state["theme_accent"] = theme['ACCENT']
+    
+    # 3. Aplicar Estilos Globales (CSS)
+    aplicar_css_global(theme)
+    
+    # 4. Verificar Conectividad API
+    api_ok = APIClient.check_api()
+    
+    # 5. Refrescar servicios IA si es necesario (Voz/ASR)
+    if st.session_state.pagina_actual == "📞 Llamada con IA":
+        SessionManager.refresh_services(mode="call")
+    
+    # 6. Renderizar Barra Lateral
+    render_sidebar(api_ok, theme)
+    
+    pagina = st.session_state.pagina_actual
+    
+    if is_admin:
+        if pagina == "📊 Dashboard":
+            render_dashboard(api_ok, theme)
+        elif pagina == "📦 Inventario":
+            render_inventario(api_ok, theme)
+        elif pagina == "📈 Ventas":
+            render_ventas(api_ok, theme)
+        elif pagina == "📋 Movimientos":
+            render_movimientos(api_ok, theme)
+        elif pagina in ["💬 Chat con IA", "📞 Llamada con IA"]:
+            render_ia_admin(pagina, api_ok, theme)
+        else:
+            render_dashboard(api_ok, theme)
+    else:
+        if pagina in ["🛒 Comprar", "🛍️ Comprar"]:
+            render_comprar(pagina, api_ok, theme)
+        elif pagina in ["💬 Chat con IA", "📞 Llamada con IA"]:
+            render_ia_cliente(pagina, api_ok, theme)
+        elif pagina == "✨ Conócenos":
+            render_conocenos(theme)
+        else:
+            render_comprar("🛒 Comprar", api_ok, theme)
+
+if __name__ == "__main__":
+    main()

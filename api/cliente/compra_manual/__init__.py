@@ -1,0 +1,3 @@
+"""
+Endpoints de compra manual.
+"""
