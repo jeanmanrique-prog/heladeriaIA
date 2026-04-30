@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+streamlit
+requests
+pandas
+plotly
+pydantic
+python-multipart
+numpy
+rapidfuzz
+ollama
+faster-whisper
+piper-tts
+sounddevice
+mcp
+
