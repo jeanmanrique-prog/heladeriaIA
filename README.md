@@ -2,6 +2,10 @@
 
 Proyecto educativo para la gestion de una heladeria con frontend en Streamlit, backend en FastAPI, base de datos SQLite y un motor de IA con chat y voz.
 
+## Guias utiles
+
+- [Guia de colaboracion para Windows y Linux](./GUIA_COLABORACION_WINDOWS_LINUX.md)
+
 ## Descripcion general
 
 Gelateria Urban IA separa la aplicacion en tres capas principales:
