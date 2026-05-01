@@ -35,6 +35,7 @@ def _fallback_inteligente(estado: dict) -> str:
 
 # Fallback genérico (solo para errores de conexión)
 _RESPUESTA_FALLBACK_CONEXION = "Uy bro, no me puedo conectar ahora. ¿Está Ollama abierto?"
+_RESPUESTA_FALLBACK = "Uy bro, ahí se enredó la cosa. ¿Me repites?"
 
 
 # ─────────────────────────────────────────────
@@ -354,13 +355,22 @@ def responder(historial: list, verbose: bool = False) -> str:
         confirmado = estado["confirmado"]
         precio_txt = f"{precio:,} pesos".replace(",", ".") if precio else "el precio del catálogo"
 
-        # CASO COMPLETO → respuesta directa sin LLM
+        # CASO COMPLETO → ejecutar venta y confirmar
         if producto and pago:
-            return f"Listo bro, ya te lo tengo 🎉"
+            # Registrar la venta en la base de datos a través de la API
+            items_api = [{"sabor": producto, "cantidad": 1}]
+            resultado_venta = crear_venta_api(items_api, pago)
+            
+            if "error" in resultado_venta:
+                if verbose:
+                    print(f"[agente] Error al registrar venta: {resultado_venta['error']}")
+                return f"Uy bro, se me enredó el pedido al guardarlo, pero ya te alisto tu tarro de {producto} 🎉"
+            
+            return f"Listo bro 🍦 ya quedó tu pedido de {producto}. ¡Gracias!"
 
         # CASO CONFIRMACIÓN + PRODUCTO → preguntar pago directamente
         if producto and confirmado and not pago:
-            return f"De una 🍦 Son {precio_txt}. ¿Pagas con efectivo o tarjeta?"
+            return f"De una 🍓 El de {producto} está disponible. Son {precio_txt}. ¿Pagas con efectivo o tarjeta?"
 
     except Exception as e:
         if verbose:
