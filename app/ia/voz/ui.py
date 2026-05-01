@@ -49,6 +49,14 @@ def render_realtime_call(theme: dict):
                 b64_u = base64.b64encode(f.read()).decode()
             urban_src = f'data:image/png;base64,{b64_u}'
 
+    # Avatar Usuario
+    user_path = images_dir / "perfil_cliente.png"
+    user_src = "👤"
+    if user_path.exists():
+        with open(user_path, "rb") as f:
+            b64_us = base64.b64encode(f.read()).decode()
+        user_src = f'data:image/png;base64,{b64_us}'
+
     saved_sid = st.session_state.get("_voz_session_id") or ""
     is_fresh = not st.session_state.get("call_greeted", False)
     
@@ -57,18 +65,34 @@ def render_realtime_call(theme: dict):
         st.session_state["_voz_session_id"] = ""
         saved_sid = ""
 
-    # Pasar todos los parámetros requeridos por ai_ui_lib.py, incluyendo colores del tema
+    # Inyectar CSS para que el contenedor de la aplicación se vea limpio y moderno
+    st.markdown("""
+        <style>
+            .main .block-container {
+                max-width: 100vw !important;
+                padding-left: 2rem !important;
+                padding-right: 2rem !important;
+                padding-top: 1rem !important;
+            }
+            iframe {
+                border-radius: 25px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.05);
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
     html_code = get_ai_call_html(
         api_url="http://127.0.0.1:8000",
         saved_sid=saved_sid,
         is_fresh=is_fresh,
         avatar_src=avatar_src,
         urban_src=urban_src,
-        accent_color=accent,
-        bg_color=bg,
-        text_color=text,
-        card_bg=card,
-        border_color=border
+        user_src=user_src,
+        accent_color="#FF4B7D", # Forzado al rosado urbano pedido
+        bg_color="#F7F7F7",
+        text_color="#222222",
+        card_bg="#FFFFFF",
+        border_color="#FF4B7D"
     )
     
-    components.html(html_code, height=900, scrolling=False)
+    components.html(html_code, height=750, scrolling=False)

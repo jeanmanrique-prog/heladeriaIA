@@ -26,10 +26,16 @@ class APIClient:
         try:
             r = requests.post(f"{API_URL}{endpoint}", json=payload, timeout=8)
             if r.status_code in (200, 201):
-                return r.json()
-            return None
-        except Exception:
-            return None
+                return True, r.json()
+            
+            # Intentar obtener el error del detalle de FastAPI
+            try:
+                error_msg = r.json().get("detail", "Error desconocido")
+            except:
+                error_msg = f"Error servidor ({r.status_code})"
+            return False, error_msg
+        except Exception as e:
+            return False, str(e)
 
     @classmethod
     def check_api(cls):

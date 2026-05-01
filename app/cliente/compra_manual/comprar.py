@@ -79,15 +79,20 @@ def _render_card_mockup(p):
         b64 = base64.b64encode(img_path.read_bytes()).decode()
         img_tag = f'<div style="text-align:center; height:150px; margin-bottom:10px;"><img src="data:image/png;base64,{b64}" style="max-height:150px; width:auto;"></div>'
     
+    stock = p.get('stock', 0)
+    stock_txt = f"<p class='card-price'>$ {p['precio_unitario']:,}</p>"
+    if stock <= 0:
+        stock_txt = "<p style='color:#EF4444; font-weight:800; font-size:1rem; margin:10px 0;'>⚠️ AGOTADO</p>"
+
     st.markdown(f"""
         {img_tag}
         <p class='card-title'>Tarro 1L {sabor.capitalize()}</p>
         <p class='card-flavor'>{sabor.capitalize()}</p>
-        <p class='card-price'>$ {p['precio_unitario']:,}</p>
+        {stock_txt}
     """, unsafe_allow_html=True)
     
-    # CRÍTICO: type="primary" fuerza el color rosa (estilizado en tema.py)
-    if st.button(f"+ PEDIR", type="primary", key=f"btn_p_mock_{p['id_producto']}", use_container_width=True):
+    # Botón deshabilitado si no hay stock
+    if st.button(f"+ PEDIR", type="primary", key=f"btn_p_mock_{p['id_producto']}", use_container_width=True, disabled=stock <= 0):
         _agregar_al_carrito(p)
         st.toast(f"¡{p['nombre_producto']} añadido!")
 
@@ -125,11 +130,14 @@ def _render_carrito_mockup(theme):
     if st.button("CONFIRMAR", type="primary", key="btn_confirm_mock", use_container_width=True):
         items_api = [{"id_producto": i["id_producto"], "cantidad": i["cantidad"]} for i in st.session_state.carrito]
         payload = {"metodo_pago": metodo.lower(), "items": items_api}
-        if APIClient.crear_venta(payload):
+        
+        ok, res = APIClient.crear_venta(payload)
+        if ok:
             st.session_state.carrito = []
             st.session_state.compra_exitosa = True
             st.rerun()
-        else: st.error("Error al procesar.")
+        else:
+            st.error(f"Error: {res}")
 
 def _modificar_cantidad(idx, delta):
     item = st.session_state.carrito[idx]

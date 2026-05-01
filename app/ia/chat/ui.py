@@ -120,12 +120,12 @@ def render_chat_interface(api_ok: bool = True, theme: dict = None):
         [data-testid="stVerticalBlockBorderWrapper"] {
             border: 1px solid #F0F0F0 !important;
             border-radius: 20px !important;
-            padding: 20px !important;
+            padding: 10px 15px !important;
             background-color: #FFFFFF !important;
             box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
         }
 
-        /* Quitar el estilo de tarjeta al contenedor interno del scroll (height=500) para no duplicar cajas */
+        /* Quitar el estilo de tarjeta al contenedor interno del scroll (height=400) para no duplicar cajas */
         [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stVerticalBlockBorderWrapper"] {
             border: none !important;
             box-shadow: none !important;
@@ -135,7 +135,7 @@ def render_chat_interface(api_ok: bool = True, theme: dict = None):
 
         /* Forzar que el chat_input se quede abajo de la tarjeta */
         .stChatInput {
-            margin-top: 10px !important;
+            margin-top: 2px !important;
         }
 
         /* Cambiar el fondo de la burbuja del usuario a rosa */
@@ -145,7 +145,7 @@ def render_chat_interface(api_ok: bool = True, theme: dict = None):
             flex-direction: row-reverse;
             border: none !important;
         }
-        /* Compatibilidad con Streamlit moderno */
+        
         [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
             background-color: #FF3366 !important;
             color: white !important;
@@ -155,9 +155,9 @@ def render_chat_interface(api_ok: bool = True, theme: dict = None):
         
         /* Redondear las burbujas */
         [data-testid="stChatMessage"] {
-            border-radius: 20px;
-            margin-bottom: 15px;
-            padding: 5px 15px;
+            border-radius: 18px;
+            margin-bottom: 8px;
+            padding: 4px 12px;
             box-shadow: 0 2px 6px rgba(0,0,0,0.03);
             border: 1px solid #eee;
         }
@@ -166,6 +166,10 @@ def render_chat_interface(api_ok: bool = True, theme: dict = None):
         [data-testid="stChatMessage"]:not(:has([data-testid="chatAvatarIcon-user"])):not([data-testid="stChatMessageUser"]) {
             background-color: #f8f9fa !important;
         }
+        
+        /* Compactar el perfil en el header */
+        .chat-profile img { width: 45px !important; height: 45px !important; }
+        .chat-profile-info h3 { font-size: 1.1rem !important; }
         </style>
     """, unsafe_allow_html=True)
     
@@ -177,10 +181,10 @@ def render_chat_interface(api_ok: bool = True, theme: dict = None):
         
         # HEADER (Fijo dentro de la tarjeta)
         render_header_chat(mode, ollama_ok, accent)
-        st.markdown("<hr style='margin-top: 15px; margin-bottom: 20px; border: 0; border-top: 1px solid #eee;'>", unsafe_allow_html=True)
+        st.markdown("<hr style='margin-top: 5px; margin-bottom: 10px; border: 0; border-top: 1px solid #eee;'>", unsafe_allow_html=True)
         
         # CONTENEDOR CON SCROLL (Solo para los mensajes)
-        with st.container(height=500):
+        with st.container(height=400):
             # Saludo por voz inicial
             if not st.session_state.get(SessionManager.state_key(mode, "saludo_enviado"), False):
                 if st.session_state.get("helio_voz_activa", False):

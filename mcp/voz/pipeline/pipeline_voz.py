@@ -25,8 +25,9 @@ from ..captura.buffer import AudioBuffer
 from ..procesamiento.turnos import GestorTurnos
 
 # Re-exportación de constantes para compatibilidad
-from mcp.config import MENSAJE_BIENVENIDA, MENSAJE_BIENVENIDA_CLIENTE, MODELO
-from mcp.prompts.prompt_base import SYSTEM_PROMPT, SYSTEM_PROMPT_VENDEDOR
+from mcp.config import MENSAJE_BIENVENIDA, MENSAJE_BIENVENIDA_CLIENTE, MODELO, PROMPT_SISTEMA_VOZ_COMPLETO
+from mcp.prompts.prompt_base import SYSTEM_PROMPT
+SYSTEM_PROMPT_VENDEDOR = PROMPT_SISTEMA_VOZ_COMPLETO
 
 # Instancias globales para el orquestador
 gestor_turnos = GestorTurnos()

@@ -23,4 +23,5 @@ MIN_AUDIO_LEN_FOR_STT = 8000 # aprox 0.5s
 # Prompts exportados para conveniencia
 from .prompts.prompt_base import SYSTEM_PROMPT, SYSTEM_PROMPT_VENDEDOR
 from .prompts.prompt_sugerencias import PROMPT_SUGERENCIAS
+from .prompts.prompt_voz_maestro import PROMPT_SISTEMA_VOZ_COMPLETO
 
