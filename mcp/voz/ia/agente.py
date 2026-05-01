@@ -5,6 +5,7 @@ import ollama
 
 from mcp.config import MODELO, API_URL
 from mcp.prompts.prompt_base import SYSTEM_PROMPT, SYSTEM_PROMPT_VENDEDOR
+from mcp.prompts.prompt_estado import PROMPT_ESTADO
 from ..procesamiento.normalizacion import normalizar_texto_base
 
 # catalog.py es un módulo aislado: SIN dependencia de mcp.types ni inventario_tools
@@ -163,18 +164,67 @@ def crear_venta_api(items: list, metodo_pago: str) -> dict:
 
 
 # ─────────────────────────────────────────────
-# MOTOR DEL AGENTE — SIN TOOLS (catálogo inyectado en sistema)
+# DETECTOR DE ESTADO DE PEDIDO — MEMORIA EXPLÍCITA
+# ─────────────────────────────────────────────
+
+_SABORES = ["fresa", "chocolate", "vainilla", "mango", "limon", "limón"]
+_METODOS_PAGO = ["efectivo", "tarjeta", "nequi", "daviplata"]
+
+def _extraer_estado_pedido(historial: list, catalogo: list) -> dict:
+    """
+    Recorre el historial para detectar el último producto y método de pago
+    mencionados. Devuelve un dict con producto, precio y pago.
+    Esto se inyecta en el system prompt para que el LLM nunca pierda contexto.
+    """
+    estado = {"producto": None, "precio": None, "pago": None}
+
+    # Construir mapa sabor → precio desde catálogo real
+    precio_por_sabor = {}
+    for p in catalogo:
+        sabor = str(p.get("sabor") or "").lower().strip()
+        precio_raw = p.get("precio_unitario") or p.get("precio") or 0
+        try:
+            precio_por_sabor[sabor] = int(float(precio_raw))
+        except (TypeError, ValueError):
+            precio_por_sabor[sabor] = 0
+
+    # Recorrer solo mensajes del usuario (role=user)
+    for msg in historial:
+        if msg.get("role") != "user":
+            continue
+        texto = str(msg.get("content", "")).lower()
+
+        # Detectar producto / sabor
+        for sabor in _SABORES:
+            if sabor in texto:
+                estado["producto"] = sabor
+                estado["precio"] = precio_por_sabor.get(sabor)
+                break
+
+        # Detectar método de pago
+        for metodo in _METODOS_PAGO:
+            if metodo in texto:
+                estado["pago"] = metodo
+                break
+
+    return estado
+
+
+# ─────────────────────────────────────────────
+# MOTOR DEL AGENTE — SIN TOOLS (catálogo + estado inyectados)
 # ─────────────────────────────────────────────
 
 def _enriquecer_historial(historial: list) -> list:
     """
-    Inyecta el catálogo REAL en cada mensaje de sistema.
-    Si no hay catálogo, bloquea la respuesta con un error controlado.
+    Inyecta en el system prompt:
+    1. El PROMPT_ESTADO (reglas de memoria)
+    2. El catálogo REAL de productos
+    3. El estado actual del pedido (producto + pago detectados en el historial)
+    Esto garantiza que el LLM NUNCA pierda contexto entre turnos.
     """
     catalogo = cargar_catalogo_productos()
 
     if not catalogo:
-        # Sin datos reales → no responder con datos inventados
         regla = (
             "\n\n⚠️ CATÁLOGO NO DISPONIBLE. "
             "Di al cliente: 'Uy bro, en este momento no me carga el menú, dame un segundo.' "
@@ -188,8 +238,9 @@ def _enriquecer_historial(historial: list) -> list:
                 enriquecido.append(m)
         return enriquecido
 
+    # Catálogo formateado
     catalogo_txt = _construir_catalogo_texto(catalogo)
-    contexto = (
+    bloque_catalogo = (
         f"\n\n═══ CATÁLOGO ACTUAL (DATOS REALES DE LA BD) ═══\n"
         f"{catalogo_txt}\n"
         f"═══════════════════════════════════════════════\n"
@@ -197,10 +248,31 @@ def _enriquecer_historial(historial: list) -> list:
         f"NUNCA inventes precios, nombres ni disponibilidad."
     )
 
+    # Estado actual del pedido extraído del historial
+    estado = _extraer_estado_pedido(historial, catalogo)
+    if estado["producto"] or estado["pago"]:
+        producto_txt = estado["producto"] or "(no elegido aún)"
+        precio_txt = f"{estado['precio']:,} pesos".replace(",", ".") if estado["precio"] else "(ver catálogo)"
+        pago_txt = estado["pago"] or "(no indicado aún)"
+        bloque_estado = (
+            f"\n\n═══ ESTADO ACTUAL DEL PEDIDO ═══\n"
+            f"producto: {producto_txt}\n"
+            f"precio: {precio_txt}\n"
+            f"pago: {pago_txt}\n"
+            f"════════════════════════════════\n"
+            f"Si el usuario ya dio el pago → responde SOLO: 'Listo, ya te lo tengo 🎉'\n"
+            f"NO preguntes nada que ya esté en el estado anterior."
+        )
+    else:
+        bloque_estado = ""
+
+    # Combinar: reglas de estado + catálogo + estado actual
+    extra = PROMPT_ESTADO + bloque_catalogo + bloque_estado
+
     enriquecido = []
     for m in historial:
         if m.get('role') == 'system':
-            enriquecido.append({'role': 'system', 'content': m['content'] + contexto})
+            enriquecido.append({'role': 'system', 'content': m['content'] + extra})
         else:
             enriquecido.append(m)
     return enriquecido
