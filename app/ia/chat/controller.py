@@ -22,14 +22,17 @@ class ChatController:
         )
         st.session_state[h_key].append({"role": "user", "content": prompt})
         
-        # 2. Obtener respuesta de la IA
+        # 2. Obtener respuesta de la IA — con session_id para memoria persistente
+        session_id = SessionManager.get_session_id(mode)
         try:
             respuesta_raw = responder_vendedor_json(
                 st.session_state[h_key],
-                verbose=False
+                verbose=False,
+                session_id=session_id
             )
-        except Exception:
-            respuesta_raw = '{"accion":"error","mensaje":"No pude procesar tu mensaje. Intenta de nuevo."}'
+        except Exception as e:
+            print(f"[ChatController] Error: {e}")
+            respuesta_raw = '{"accion":"informacion","mensaje":"Uy, algo salió mal. ¿Me repites el pedido?"}'
 
         # 3. Guardar respuesta en el estado
         st.session_state[h_key].append({"role": "assistant", "content": respuesta_raw})

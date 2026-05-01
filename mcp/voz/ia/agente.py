@@ -2,15 +2,24 @@ import json
 import re
 import requests
 import ollama
+from typing import Optional, Dict, List, Any
 
 from mcp.config import MODELO, API_URL
-from mcp.prompts.prompt_base import SYSTEM_PROMPT, SYSTEM_PROMPT_VENDEDOR
+from mcp.prompts.prompt_base import SYSTEM_PROMPT
+from mcp.prompts.prompt_ventas import PROMPT_VENDEDOR as SYSTEM_PROMPT_VENDEDOR
 from mcp.prompts.prompt_estado import PROMPT_ESTADO
+from mcp.prompts.prompt_pagos import PROMPT_PAGOS
+from mcp.prompts.prompt_sugerencias import PROMPT_SUGERENCIAS
+
 from ..procesamiento.normalizacion import normalizar_texto_base
 
-# catalog.py es un módulo aislado: SIN dependencia de mcp.types ni inventario_tools
-# Esto evita el ImportError al iniciar la app Streamlit
-from mcp.tools.catalog import get_catalog
+# Recursos (Resources) - Capa de datos de solo lectura
+from mcp.resources.catalog_resource import CatalogResource
+from mcp.resources.contexto_resource import ContextoResource
+
+# Herramientas (Tools) - Capa de acciones reales
+from mcp.tools.catalog_tools import obtener_catalogo_real
+from api.ia.estado import GestorEstado
 
 # ─────────────────────────────────────────────
 # CONSTANTES DE FILTRADO
@@ -22,21 +31,60 @@ _PATRON_TECNICO = re.compile(
     re.IGNORECASE
 )
 
-# Fallback contextual — reemplaza el mensaje de "error técnico"
-def _fallback_inteligente(estado: dict) -> str:
-    """Genera una respuesta de fallback útil según el estado actual del pedido."""
-    if estado.get("producto") and not estado.get("pago"):
-        precio = estado.get("precio")
-        precio_txt = f"{precio:,} pesos".replace(",", ".") if precio else "el precio del catálogo"
-        return f"¿Vas con efectivo o tarjeta? 💳 Son {precio_txt}."
-    if not estado.get("producto"):
-        return "¿Qué sabor te provoca? 🍦"
-    return "¿Me confirmas el pedido? 🙌"
+# ─────────────────────────────────────────────
+# NORMALIZACIÓN
+# ─────────────────────────────────────────────
 
-# Fallback genérico (solo para errores de conexión)
+PALABRAS_CANTIDAD = {
+    "un": 1, "una": 1, "uno": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5,
+    "seis": 6, "siete": 7, "ocho": 8, "nueve": 9, "diez": 10
+}
+
+PALABRAS_GENERICAS_PRODUCTO = {
+    "de", "del", "la", "el", "los", "las", "por", "favor", "quiero", "me",
+    "das", "dame", "para", "pagar", "pago", "con", "helado", "helados",
+    "tarro", "tarros", "litro", "litros", "uno", "una", "un", "dos",
+    "pedir", "pedido", "quisiera", "solicito", "hola", "hey", "id", "producto"
+}
+
+import unicodedata
+
+def normalizar_texto_usuario_voz(texto: str) -> str:
+    """Normalización robusta de texto de voz/chat."""
+    if not texto: return ""
+    texto = texto.strip().lower()
+    texto = unicodedata.normalize("NFKD", texto)
+    texto = "".join(ch for ch in texto if not unicodedata.combining(ch))
+    texto = re.sub(r"[^a-z0-9\s]", " ", texto)
+    reemplazos = [
+        (r"\bquieto\b", "quiero"), (r"\bqiero\b", "quiero"), (r"\bkiero\b", "quiero"),
+        (r"\belado\b", "helado"), (r"\be lado\b", "helado"), (r"\bhelao\b", "helado"),
+        (r"\bpresa\b", "fresa")
+    ]
+    for patron, reemplazo in reemplazos:
+        texto = re.sub(patron, reemplazo, texto)
+    return re.sub(r"\s+", " ", texto).strip()
+
+def _es_saludo_simple(t: str) -> bool:
+    saludos = {"hola", "buenas", "buenos dias", "buenas tardes", "buenas noches", "hey", "saludos"}
+    return t in saludos
+
+def _es_intencion_catalogo(t: str) -> bool:
+    patrones = ("que hay", "que tienen", "que sabores", "que productos", "menu", "catalogo", "disponible")
+    return any(p in t for p in patrones)
+
+def _es_intencion_pago(t: str) -> bool:
+    if t in {"efectivo", "tarjeta"}: return True
+    return bool(re.search(r"\b(pago|pagar|metodo|forma|cobrar|efectivo|tarjeta)\b", t))
+
+def _es_intencion_pedido(t: str) -> bool:
+    if _es_intencion_catalogo(t) or _es_intencion_pago(t): return False
+    claves = ("quiero", "dame", "me das", "pedido", "pedir", "vender", "helado", "tarro")
+    if any(k in t for k in claves): return True
+    return bool(re.search(r"\b(un|una|uno|dos|tres|cuatro|cinco|\d+)\s+de\s+\w+\b", t))
+
 _RESPUESTA_FALLBACK_CONEXION = "Uy bro, no me puedo conectar ahora. ¿Está Ollama abierto?"
-_RESPUESTA_FALLBACK = "Uy bro, ahí se enredó la cosa. ¿Me repites?"
-
+_RESPUESTA_FALLBACK = "Uy, ahí se enredó la cosa. ¿Me repites?"
 
 # ─────────────────────────────────────────────
 # VERIFICACIÓN DE OLLAMA
@@ -57,39 +105,27 @@ def verificar_ollama() -> tuple[bool, str]:
             msg = "Ollama no responde. Asegúrate de que la aplicación esté abierta."
         return False, msg
 
-
 # ─────────────────────────────────────────────
-# CATÁLOGO DE PRODUCTOS — usa get_catalog() con fallback SQLite
+# CATÁLOGO (para compatibilidad interna)
 # ─────────────────────────────────────────────
 
 def cargar_catalogo_productos() -> list:
-    """
-    Carga el catálogo real.
-    Prioridad: API REST → SQLite directo (via get_catalog).
-    NUNCA retorna lista vacía si hay datos en la BD.
-    """
-    return get_catalog()
-
+    return obtener_catalogo_real()
 
 def _construir_catalogo_texto(catalogo: list) -> str:
-    """Formatea el catálogo en texto claro para inyectar al prompt.
-    Garantiza que precio y stock nunca sean None."""
     if not catalogo:
         return "⚠️ No hay productos disponibles en este momento."
     lineas = []
     for p in catalogo:
-        # Normalizar campos — nunca None
         nombre = str(p.get('nombre_producto') or p.get('nombre') or 'Producto sin nombre')
         sabor = str(p.get('sabor') or '?')
-        precio_raw = p.get('precio_unitario') or p.get('precio') or 0
         try:
-            precio = float(precio_raw)
-        except (TypeError, ValueError):
+            precio = float(p.get('precio_unitario') or p.get('precio') or 0)
+        except:
             precio = 0.0
-        stock_raw = p.get('stock') or p.get('cantidad_unidades') or 0
         try:
-            stock = int(stock_raw)
-        except (TypeError, ValueError):
+            stock = int(p.get('stock') or p.get('cantidad_unidades') or 0)
+        except:
             stock = 0
         stock_txt = f"{stock} uds" if stock > 0 else "AGOTADO"
         id_prod = p.get('id_producto', '?')
@@ -99,234 +135,188 @@ def _construir_catalogo_texto(catalogo: list) -> str:
         )
     return "\n".join(lineas)
 
-
 # ─────────────────────────────────────────────
-# FILTRO DE RESPUESTA — BLOQUEA CONTENIDO TÉCNICO
+# FILTRO DE RESPUESTA
 # ─────────────────────────────────────────────
 
 def _limpiar_respuesta(texto: str) -> str:
-    """Devuelve fallback si la respuesta contiene leaks técnicos."""
     if not texto or not texto.strip():
         return _RESPUESTA_FALLBACK
     if _PATRON_TECNICO.search(texto):
         return _RESPUESTA_FALLBACK
-    # Quitar bloques de código
     limpio = re.sub(r'```[\w]*\n?', '', texto)
-    limpio = re.sub(r'```', '', limpio)
-    limpio = limpio.strip()
+    limpio = re.sub(r'```', '', limpio).strip()
     return limpio if limpio else _RESPUESTA_FALLBACK
 
-
 # ─────────────────────────────────────────────
-# FORMATEO DE TEXTO PARA VOZ / DISPLAY
+# FORMATEO DE TEXTO
 # ─────────────────────────────────────────────
 
 def _corregir_mojibake(texto: str) -> str:
-    if not texto:
-        return ""
+    if not texto: return ""
     try:
         return texto.encode('latin1').decode('utf-8')
-    except Exception:
+    except:
         return texto
-
 
 def _relajar_texto_urbano(texto: str) -> str:
     t = _corregir_mojibake(texto or "").strip()
-    if not t:
-        return t
+    if not t: return t
     reemplazos = {
         "Con que metodo de pago deseas pagar? (efectivo o tarjeta)": "¿Vas con efectivo o tarjeta, bro?",
-        "Venta realizada con exito.": "¡Listo bro, pedido confirmado!",
-        "No pude procesar la respuesta.": "Uy bro, ahí se enredó la respuesta.",
+        "Venta realizada con exito.": "¡Listo, ya te lo tengo 🎉",
+        "No pude procesar la respuesta.": "Uy, ahí se enredó la respuesta.",
     }
     for origen, destino in reemplazos.items():
         t = t.replace(origen, destino)
     t = re.sub(r"(?i)\b(brother|mano|parcero)\b", "bro", t)
     return t
 
-
 def texto_voz_respuesta_vendedor(texto: str) -> str:
-    """Convierte cualquier respuesta (JSON o texto) en frase natural para voz/display."""
-    # Si el texto parece JSON, intentar extraer el campo mensaje
-    if texto and texto.strip().startswith("{"):
-        try:
-            data = json.loads(texto)
-            if isinstance(data, dict):
-                mensaje = str(data.get("mensaje", "")).strip()
-                if mensaje:
-                    return _relajar_texto_urbano(mensaje)
-        except Exception:
-            pass
-    # Si no es JSON o no tiene mensaje, devolver el texto limpio
-    limpio = _limpiar_respuesta(texto)
-    return _relajar_texto_urbano(limpio)
+    """Convierte la respuesta JSON del vendedor en una frase natural para voz."""
+    try:
+        data = json.loads(texto)
+    except:
+        return _relajar_texto_urbano(texto)
+
+    accion = data.get("accion")
+    mensaje = str(data.get("mensaje", "")).strip()
+
+    if accion in {"saludo", "sin_stock", "confirmar_pago", "informacion"}:
+        return _relajar_texto_urbano(mensaje or "No pude procesar la respuesta.")
+
+    if accion == "mostrar_productos":
+        productos = data.get("productos", [])
+        if not productos:
+            return "En este momento no tengo helados disponibles."
+        resumen = [p.get("sabor") or p.get("nombre") or "helado" for p in productos[:3]]
+        return f"{mensaje} Tengo " + ", ".join(resumen) + " y otros más."
+
+    if accion in {"pedir_pago", "crear_venta"}:
+        # El campo 'mensaje' ya contiene el texto completo con precio y pregunta de pago
+        # Devolvemos directamente sin duplicar items ni total
+        return _relajar_texto_urbano(mensaje) if mensaje else "\u00bfPagas con efectivo o tarjeta?"
+
+    if accion == "venta_exitosa":
+        return _relajar_texto_urbano(mensaje)
+
+    return _relajar_texto_urbano(mensaje or texto)
 
 
 # ─────────────────────────────────────────────
-# CREAR VENTA (Llamada directa a la API — sin tool del LLM)
+# CREAR VENTA — TOOL REAL (llama a la API)
 # ─────────────────────────────────────────────
 
 def crear_venta_api(items: list, metodo_pago: str) -> dict:
-    """Llama a la API REST para crear la venta. Devuelve el resultado o error."""
+    """Llama al endpoint /vender de la API REST. Retorna resultado o error."""
+    # Normalizar método de pago: el endpoint solo acepta 'efectivo' o 'tarjeta'
+    _mapa_pago = {
+        "nequi": "efectivo",
+        "daviplata": "efectivo",
+        "efectivo": "efectivo",
+        "tarjeta": "tarjeta",
+    }
+    metodo_normalizado = _mapa_pago.get(metodo_pago.lower(), "efectivo")
     try:
-        payload = {"items": items, "metodo_pago": metodo_pago}
-        r = requests.post(f"{API_URL}/ventas", json=payload, timeout=6)
+        payload = {"metodo_pago": metodo_normalizado, "items": items}
+        r = requests.post(f"{API_URL}/vender", json=payload, timeout=6)
         return r.json()
     except Exception as e:
         return {"error": str(e)}
 
 
 # ─────────────────────────────────────────────
-# DETECTOR DE ESTADO DE PEDIDO — MEMORIA EXPLÍCITA
+# MÁQUINA DE ESTADOS — MEMORIA DE LA CONVERSACIÓN
+# Flujo: inicio → esperando_pago → completado
 # ─────────────────────────────────────────────
 
-_SABORES = ["fresa", "chocolate", "vainilla", "mango", "limon", "limón"]
-_METODOS_PAGO = ["efectivo", "tarjeta", "nequi", "daviplata"]
+_METODOS_PAGO   = ["efectivo", "tarjeta", "nequi", "daviplata"]
 _CONFIRMACIONES = ["si", "sí", "dale", "ok", "listo", "de una", "hágale", "hagale", "claro", "perfecto", "bueno"]
 
-def _extraer_estado_pedido(historial: list, catalogo: list) -> dict:
-    """
-    Recorre el historial para detectar el último producto, método de pago
-    y si el usuario confirmó el pedido.
-    Esto se inyecta en el system prompt para que el LLM nunca pierda contexto.
-    """
-    estado = {"producto": None, "precio": None, "pago": None, "confirmado": False}
 
-    # Construir mapa sabor → precio desde catálogo real
-    precio_por_sabor = {}
+def _extraer_estado_pedido(historial: list, catalogo: list, session_id: Optional[str] = None) -> dict:
+    """
+    Máquina de estados estricta: inicio → esperando_pago → completado.
+    El estado persistente (GestorEstado) es la fuente de verdad.
+    Solo el ÚLTIMO mensaje del usuario puede avanzar el estado — nunca retrocede.
+    """
+    # 1. Fuente de verdad: estado guardado en la sesión
+    estado = {"producto": None, "precio": None, "pago": None, "confirmado": False, "paso": "inicio"}
+    if session_id:
+        estado = GestorEstado.obtener_estado(session_id)
+
+    # Mapa sabor → {id, precio, stock} para búsqueda O(1)
+    catalogo_map = {}
     for p in catalogo:
-        sabor = str(p.get("sabor") or "").lower().strip()
-        precio_raw = p.get("precio_unitario") or p.get("precio") or 0
-        try:
-            precio_por_sabor[sabor] = int(float(precio_raw))
-        except (TypeError, ValueError):
-            precio_por_sabor[sabor] = 0
+        sabor_norm = normalizar_texto_usuario_voz(str(p.get("sabor") or ""))
+        if sabor_norm:
+            catalogo_map[sabor_norm] = {
+                "id":     p.get("id_producto"),
+                "precio": int(float(p.get("precio_unitario") or p.get("precio") or 0)),
+                "stock":  int(p.get("stock") or p.get("cantidad_unidades") or 0)
+            }
 
-    # Recorrer solo mensajes del usuario (role=user)
-    for msg in historial:
-        if msg.get("role") != "user":
-            continue
-        texto = str(msg.get("content", "")).lower().strip()
+    # 2. Analizar el ÚLTIMO mensaje del usuario
+    msg_usuario = ""
+    for m in reversed(historial):
+        if m.get("role") == "user":
+            msg_usuario = normalizar_texto_usuario_voz(m.get("content", ""))
+            break
 
-        # Detectar producto / sabor
-        for sabor in _SABORES:
-            if sabor in texto:
-                estado["producto"] = sabor
-                estado["precio"] = precio_por_sabor.get(sabor)
-                # Si cambia de sabor, resetear pago y confirmación
-                estado["pago"] = None
-                estado["confirmado"] = False
-                break
+    if msg_usuario:
+        paso_actual = estado.get("paso", "inicio")
 
-        # Detectar método de pago
-        for metodo in _METODOS_PAGO:
-            if metodo in texto:
-                estado["pago"] = metodo
-                break
-
-        # Detectar confirmaciones simples ("sí", "dale", "ok"...)
-        # Solo si el mensaje es corto (≤ 4 palabras) — evita falsos positivos
-        palabras = texto.split()
-        if len(palabras) <= 4:
-            for confirmacion in _CONFIRMACIONES:
-                if confirmacion in palabras or texto == confirmacion:
-                    estado["confirmado"] = True
+        # PASO INICIO / COMPLETADO → buscar nuevo sabor
+        if paso_actual in ("inicio", "completado"):
+            for sabor, datos in catalogo_map.items():
+                if sabor in msg_usuario and len(sabor) > 3:
+                    estado["producto"]   = sabor
+                    estado["precio"]     = datos["precio"]
+                    estado["pago"]       = None
+                    estado["confirmado"] = False
+                    estado["paso"]       = "esperando_pago"
                     break
+
+        # PASO ESPERANDO_PAGO → buscar método de pago SOLAMENTE
+        elif paso_actual == "esperando_pago":
+            pago_encontrado = False
+            for metodo in _METODOS_PAGO:
+                if metodo in msg_usuario:
+                    estado["pago"]  = metodo
+                    estado["paso"]  = "completado"
+                    pago_encontrado = True
+                    break
+            # Si dijo "sí"/"dale" sin especificar método → marcar confirmado para el prompt
+            if not pago_encontrado:
+                for conf in _CONFIRMACIONES:
+                    if conf in msg_usuario:
+                        estado["confirmado"] = True
+                        break
+
+    # 3. Persistir estado actualizado
+    if session_id:
+        GestorEstado.actualizar_estado(session_id, estado)
 
     return estado
 
 
 # ─────────────────────────────────────────────
-# MOTOR DEL AGENTE — SIN TOOLS (catálogo + estado inyectados)
+# ENRIQUECIMIENTO DE HISTORIAL (inyecta resources + prompts)
 # ─────────────────────────────────────────────
 
-def _enriquecer_historial(historial: list) -> list:
+def _enriquecer_historial(historial: list, session_id: Optional[str] = None) -> list:
     """
-    Inyecta en el system prompt:
-    1. El PROMPT_ESTADO (reglas de memoria)
-    2. El catálogo REAL de productos
-    3. El estado actual del pedido (producto + pago detectados en el historial)
-    Esto garantiza que el LLM NUNCA pierda contexto entre turnos.
+    ARQUITECTURA MCP: Inyecta RESOURCES y PROMPTS en el contexto del modelo.
     """
-    catalogo = cargar_catalogo_productos()
+    # 1. Resources (datos reales de solo lectura)
+    catalogo_txt = CatalogResource.get_catalog_text()
+    contexto_txt = ContextoResource.get_context_text(session_id) if session_id else ""
 
-    if not catalogo:
-        regla = (
-            "\n\n⚠️ CATÁLOGO NO DISPONIBLE. "
-            "Di al cliente: 'Uy bro, en este momento no me carga el menú, dame un segundo.' "
-            "NO inventes precios ni productos."
-        )
-        enriquecido = []
-        for m in historial:
-            if m.get('role') == 'system':
-                enriquecido.append({'role': 'system', 'content': m['content'] + regla})
-            else:
-                enriquecido.append(m)
-        return enriquecido
+    # 2. Prompts (cerebro conversacional)
+    prompts_ia = PROMPT_ESTADO + PROMPT_PAGOS + PROMPT_SUGERENCIAS
 
-    # Catálogo formateado
-    catalogo_txt = _construir_catalogo_texto(catalogo)
-    bloque_catalogo = (
-        f"\n\n═══ CATÁLOGO ACTUAL (DATOS REALES DE LA BD) ═══\n"
-        f"{catalogo_txt}\n"
-        f"═══════════════════════════════════════════════\n"
-        f"REGLA CRÍTICA: USA SOLO ESTOS PRECIOS Y STOCKS. "
-        f"NUNCA inventes precios, nombres ni disponibilidad."
-    )
-
-    # Estado actual del pedido extraído del historial
-    estado = _extraer_estado_pedido(historial, catalogo)
-    producto    = estado["producto"]
-    precio      = estado["precio"]
-    pago        = estado["pago"]
-    confirmado  = estado["confirmado"]
-
-    precio_txt = f"{precio:,} pesos".replace(",", ".") if precio else "(ver catálogo)"
-
-    if producto and pago:
-        # ─ CASO 3: Pedido COMPLETO — producto + pago confirmados
-        bloque_estado = (
-            f"\n\n═══ ESTADO DEL PEDIDO: COMPLETO ═══\n"
-            f"producto: {producto}\n"
-            f"precio:   {precio_txt}\n"
-            f"pago:     {pago}\n"
-            f"════════════════════════════════════\n"
-            f"✅ TODO LISTO. RESPONDE SOLO:\n"
-            f"'Listo, ya te lo tengo 🎉'\n"
-            f"NO hagas más preguntas."
-        )
-    elif producto and confirmado and not pago:
-        # ─ CASO 2b: Cliente confirmó ("sí", "dale"...) pero no ha dicho cómo paga
-        bloque_estado = (
-            f"\n\n═══ ESTADO DEL PEDIDO: CONFIRMADO, PENDIENTE PAGO ═══\n"
-            f"producto:   {producto}\n"
-            f"precio:     {precio_txt}\n"
-            f"confirmado: SÍ\n"
-            f"pago:       (AÚN NO INDICADO)\n"
-            f"═══════════════════════════════════════════════════════\n"
-            f"⚠️ El cliente YA confirmó el pedido.\n"
-            f"SIGUIENTE PASO: preguntar SOLO el método de pago.\n"
-            f"Ejemplo: 'De una 🍦 Son {precio_txt}. ¿Pagas con efectivo o tarjeta?'"
-        )
-    elif producto and not pago:
-        # ─ CASO 2: Tiene producto, sin confirmar ni pagar
-        bloque_estado = (
-            f"\n\n═══ ESTADO DEL PEDIDO: PENDIENTE PAGO ═══\n"
-            f"producto: {producto}\n"
-            f"precio:   {precio_txt}\n"
-            f"pago:     (AÚN NO INDICADO)\n"
-            f"══════════════════════════════════════════\n"
-            f"⚠️ SIGUIENTE PASO OBLIGATORIO:\n"
-            f"Confirma precio y pregunta método de pago.\n"
-            f"Ejemplo: 'Listo, te dejo el de {producto} 🍦 Son {precio_txt}. ¿Pagas con efectivo o tarjeta?'\n"
-            f"❌ NO digas 'Listo ya te lo tengo' hasta que el cliente diga cómo paga."
-        )
-    else:
-        # ─ CASO 1: Sin estado — primera interacción
-        bloque_estado = ""
-
-    # Combinar: reglas de estado + catálogo + estado actual
-    extra = PROMPT_ESTADO + bloque_catalogo + bloque_estado
+    # 3. Bloque de contexto completo
+    extra = f"\n\n{prompts_ia}\n\n{catalogo_txt}\n\n{contexto_txt}"
 
     enriquecido = []
     for m in historial:
@@ -337,96 +327,130 @@ def _enriquecer_historial(historial: list) -> list:
     return enriquecido
 
 
-def responder(historial: list, verbose: bool = False) -> str:
-    """
-    Responde al cliente con lógica determinística primero (cortocircuito),
-    luego llama a Ollama solo cuando el estado es ambiguo.
-    Esto compensa las limitaciones del modelo pequeño (1B).
-    """
-    # ── Lógica determinística ANTES del LLM ──────────────────────────────────
-    # Precargamos catálogo y estado para cortocircuitar el modelo cuando sea
-    # posible y evitar alucinaciones del modelo pequeño.
+def responder(historial: list, verbose: bool = False, session_id: Optional[str] = None) -> str:
+    """Genera respuesta en texto natural usando el estado de sesión."""
     try:
-        catalogo = cargar_catalogo_productos()
-        estado = _extraer_estado_pedido(historial, catalogo)
-        producto   = estado["producto"]
-        precio     = estado["precio"]
-        pago       = estado["pago"]
-        confirmado = estado["confirmado"]
-        precio_txt = f"{precio:,} pesos".replace(",", ".") if precio else "el precio del catálogo"
-
-        # CASO COMPLETO → ejecutar venta y confirmar
-        if producto and pago:
-            # Registrar la venta en la base de datos a través de la API
-            items_api = [{"sabor": producto, "cantidad": 1}]
-            resultado_venta = crear_venta_api(items_api, pago)
-            
-            if "error" in resultado_venta:
-                if verbose:
-                    print(f"[agente] Error al registrar venta: {resultado_venta['error']}")
-                return f"Uy bro, se me enredó el pedido al guardarlo, pero ya te alisto tu tarro de {producto} 🎉"
-            
-            return f"Listo bro 🍦 ya quedó tu pedido de {producto}. ¡Gracias!"
-
-        # CASO CONFIRMACIÓN + PRODUCTO → preguntar pago directamente
-        if producto and confirmado and not pago:
-            return f"De una 🍓 El de {producto} está disponible. Son {precio_txt}. ¿Pagas con efectivo o tarjeta?"
-
-    except Exception as e:
-        if verbose:
-            print(f"[agente] Error en pre-procesado: {e}")
-        estado = {}  # fallback seguro
-        catalogo = []
-
-    # ── Llamada al LLM (casos ambiguos o primera interacción) ─────────────────
-    try:
-        historial_enriquecido = _enriquecer_historial(historial)
-
+        historial_enriquecido = _enriquecer_historial(historial, session_id=session_id)
         response = ollama.chat(
             model=MODELO,
             messages=historial_enriquecido,
-            options={
-                "num_predict": 200,
-                "temperature": 0.6,
-                "top_p": 0.85,
-                "repeat_penalty": 1.15,
-            }
+            options={"num_predict": 200, "temperature": 0.6}
         )
-
         contenido = response.message.content or ""
-        resultado = _limpiar_respuesta(contenido)
-
-        # Si el LLM aún devuelve algo técnico, usar fallback contextual
-        if resultado == _RESPUESTA_FALLBACK_CONEXION or not resultado.strip():
-            return _fallback_inteligente(estado)
-
-        return resultado
-
+        return _limpiar_respuesta(contenido)
     except Exception as e:
-        err = str(e).lower()
-        if verbose:
-            print(f"[agente] Error en Ollama: {e}")
-        if "connect" in err or "refused" in err:
-            return _RESPUESTA_FALLBACK_CONEXION
-        # Fallback contextual en lugar del mensaje de error técnico
-        return _fallback_inteligente(estado)
+        if verbose: print(f"[agente] Error: {e}")
+        return _RESPUESTA_FALLBACK_CONEXION
 
 
 # ─────────────────────────────────────────────
-# RESPONDER VENDEDOR JSON
-# Compatible con ia_gui.py que espera JSON válido para renderizar la UI
+# MOTOR PRINCIPAL — MÁQUINA DE ESTADOS JSON
 # ─────────────────────────────────────────────
 
-def responder_vendedor_json(historial: list, verbose: bool = False) -> str:
+def responder_vendedor_json(historial: list, verbose: bool = False, session_id: Optional[str] = None) -> str:
     """
-    Obtiene respuesta del LLM como texto natural.
-    La envuelve en JSON compatible con la UI (accion + mensaje).
-    NUNCA devuelve tools ni JSON crudo del LLM.
+    Motor DETERMINÍSTICO basado en MÁQUINA DE ESTADOS estricta.
+    Flujo: inicio → esperando_pago → completado
+    Cada paso produce UN SOLO tipo de respuesta — nunca se mezclan.
     """
-    texto = responder(historial, verbose=verbose)
-    texto_limpio = _relajar_texto_urbano(texto)
+    catalogo = obtener_catalogo_real()
+
+    # Último mensaje del usuario
+    msg_usuario = ""
+    for m in reversed(historial):
+        if m.get("role") == "user":
+            msg_usuario = normalizar_texto_usuario_voz(m.get("content", ""))
+            break
+
+    # ── CORTOCIRCUITOS INMEDIATOS ──────────────────────────────────────────────
+    if not msg_usuario:
+        return json.dumps({"accion": "saludo", "mensaje": "¡Hola! ¿Qué helado te provoca hoy? 🍦"})
+
+    if _es_saludo_simple(msg_usuario):
+        return json.dumps({"accion": "saludo", "mensaje": "Bienvenido a Gelateria Urbana, bro. ¿Qué sabor te empaco hoy? 😎"})
+
+    if _es_intencion_catalogo(msg_usuario):
+        productos = [
+            {"id_producto": p.get("id_producto"), "sabor": p.get("sabor"), "precio": p.get("precio_unitario")}
+            for p in catalogo if int(p.get("stock") or 0) > 0
+        ]
+        return json.dumps({
+            "accion": "mostrar_productos",
+            "mensaje": "Aquí tienes lo que tengo disponible ahora:",
+            "productos": productos
+        }, ensure_ascii=False)
+
+    # ── ESTADO PERSISTENTE (fuente de verdad) ─────────────────────────────────
+    estado = _extraer_estado_pedido(historial, catalogo, session_id=session_id)
+    paso           = estado.get("paso", "inicio")
+    producto_sabor = estado.get("producto")
+    pago           = estado.get("pago")
+
+    # Datos reales del catálogo para el sabor guardado
+    producto_id = None
+    precio_real = 0
+    stock_real  = 0
+    if producto_sabor:
+        for p in catalogo:
+            if normalizar_texto_usuario_voz(str(p.get("sabor", ""))) == producto_sabor:
+                producto_id = p.get("id_producto")
+                precio_real = int(float(p.get("precio_unitario") or p.get("precio") or 0))
+                stock_real  = int(p.get("stock") or p.get("cantidad_unidades") or 0)
+                break
+
+    precio_txt = f"{precio_real:,.0f}".replace(",", ".") + " pesos" if precio_real else ""
+
+    # ── MÁQUINA DE ESTADOS — cada caso es EXCLUSIVO ───────────────────────────
+
+    # CASO 1: COMPLETADO → producto + pago listos → EJECUTAR VENTA → confirmar
+    if paso == "completado" and producto_id and pago:
+        crear_venta_api([{"id_producto": producto_id, "cantidad": 1}], pago)
+        if session_id:
+            GestorEstado.limpiar_estado(session_id)
+        return json.dumps({
+            "accion": "venta_exitosa",
+            "mensaje": "Listo, ya te lo tengo 🎉",
+            "detalle": {"producto": producto_sabor, "pago": pago, "total": precio_real}
+        }, ensure_ascii=False)
+
+    # CASO 2: ESPERANDO_PAGO → tenemos producto, falta pago
+    if paso == "esperando_pago" and producto_id:
+        # Sin stock: sugerir alternativa y resetear
+        if stock_real == 0:
+            alternativa = next(
+                (p.get("sabor") for p in catalogo
+                 if int(p.get("stock") or 0) > 0 and
+                 normalizar_texto_usuario_voz(str(p.get("sabor", ""))) != producto_sabor),
+                None
+            )
+            alt_txt = f" Te recomiendo el de {alternativa} 🍦" if alternativa else ""
+            if session_id:
+                GestorEstado.limpiar_estado(session_id)
+            return json.dumps({
+                "accion": "sin_stock",
+                "mensaje": f"Uy, el de {producto_sabor} está agotado 😔 ¿Quieres otro?{alt_txt}"
+            }, ensure_ascii=False)
+
+        # Con stock: pedir método de pago (UN SOLO mensaje, sin confirmar todavía)
+        return json.dumps({
+            "accion": "pedir_pago",
+            "mensaje": f"Listo, te dejo el de {producto_sabor} 🍦 Son {precio_txt}. ¿Pagas con efectivo o tarjeta?",
+            "items": [{"id_producto": producto_id, "producto": producto_sabor, "cantidad": 1}],
+            "total": precio_real
+        }, ensure_ascii=False)
+
+    # ── FALLBACK AL LLM — solo para charla general ────────────────────────────
+    texto_llm = responder(historial, verbose=verbose, session_id=session_id)
+
+    # Blindaje: si el LLM genera JSON, extraer solo el mensaje
+    if "{" in texto_llm and "}" in texto_llm:
+        try:
+            temp = json.loads(re.search(r'\{.*\}', texto_llm, re.DOTALL).group())
+            texto_llm = temp.get("mensaje") or temp.get("content") or texto_llm
+        except:
+            texto_llm = re.sub(r'\{.*\}', '', texto_llm).strip()
 
     return json.dumps({
         "accion": "informacion",
-        "mensaje": texto_limpio
+        "mensaje": _relajar_texto_urbano(texto_llm)
     }, ensure_ascii=False)

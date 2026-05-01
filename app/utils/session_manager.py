@@ -131,3 +131,15 @@ class SessionManager:
         mensajes = st.session_state[m_key]
         if len(mensajes) > (1 + MAX_TURNOS_UI * 2):
             st.session_state[m_key] = mensajes[:1] + mensajes[-(MAX_TURNOS_UI * 2):]
+
+    @staticmethod
+    def get_session_id(mode: str) -> str:
+        """
+        Devuelve un ID de sesión estable y único por usuario/modo.
+        Se guarda en st.session_state para que persista durante toda la sesión.
+        """
+        sid_key = SessionManager.state_key(mode, "session_id")
+        if sid_key not in st.session_state:
+            import uuid
+            st.session_state[sid_key] = str(uuid.uuid4())
+        return st.session_state[sid_key]

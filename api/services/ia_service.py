@@ -2,6 +2,7 @@ import json
 import uuid
 import time
 from typing import Optional
+from api.ia.estado import GestorEstado
 from mcp.voz.pipeline.pipeline_voz import responder_vendedor_json, SYSTEM_PROMPT_VENDEDOR, MENSAJE_BIENVENIDA_CLIENTE
 
 class IAService:
@@ -26,8 +27,9 @@ class IAService:
         sesion["last_seen"] = time.time()
 
         try:
-            # Llamada al core de la IA (que está en mcp.voz.pipeline o similar)
-            respuesta_raw = responder_vendedor_json(sesion["historial"])
+            # Llamada al core de la IA con el session_id para manejar el estado
+            # Pasamos el session_id para que el agente pueda recuperar el estado persistente
+            respuesta_raw = responder_vendedor_json(sesion["historial"], session_id=session_id)
             
             # Intentar parsear si es JSON
             try:
@@ -39,7 +41,7 @@ class IAService:
             return respuesta_data
         except Exception as e:
             print(f"Error en IAService: {e}")
-            return None
+            return {"mensaje": "Uy bro, ahí se enredó el proceso.", "accion": "informacion"}
             
     @classmethod
     def limpiar_sesiones_antiguas(cls, ttl_segundos: int = 3600):
