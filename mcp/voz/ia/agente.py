@@ -22,7 +22,19 @@ _PATRON_TECNICO = re.compile(
     re.IGNORECASE
 )
 
-_RESPUESTA_FALLBACK = "Uy bro, tuve un problema técnico. ¿Puedes repetirme qué quieres?"
+# Fallback contextual — reemplaza el mensaje de "error técnico"
+def _fallback_inteligente(estado: dict) -> str:
+    """Genera una respuesta de fallback útil según el estado actual del pedido."""
+    if estado.get("producto") and not estado.get("pago"):
+        precio = estado.get("precio")
+        precio_txt = f"{precio:,} pesos".replace(",", ".") if precio else "el precio del catálogo"
+        return f"¿Vas con efectivo o tarjeta? 💳 Son {precio_txt}."
+    if not estado.get("producto"):
+        return "¿Qué sabor te provoca? 🍦"
+    return "¿Me confirmas el pedido? 🙌"
+
+# Fallback genérico (solo para errores de conexión)
+_RESPUESTA_FALLBACK_CONEXION = "Uy bro, no me puedo conectar ahora. ¿Está Ollama abierto?"
 
 
 # ─────────────────────────────────────────────
@@ -169,14 +181,15 @@ def crear_venta_api(items: list, metodo_pago: str) -> dict:
 
 _SABORES = ["fresa", "chocolate", "vainilla", "mango", "limon", "limón"]
 _METODOS_PAGO = ["efectivo", "tarjeta", "nequi", "daviplata"]
+_CONFIRMACIONES = ["si", "sí", "dale", "ok", "listo", "de una", "hágale", "hagale", "claro", "perfecto", "bueno"]
 
 def _extraer_estado_pedido(historial: list, catalogo: list) -> dict:
     """
-    Recorre el historial para detectar el último producto y método de pago
-    mencionados. Devuelve un dict con producto, precio y pago.
+    Recorre el historial para detectar el último producto, método de pago
+    y si el usuario confirmó el pedido.
     Esto se inyecta en el system prompt para que el LLM nunca pierda contexto.
     """
-    estado = {"producto": None, "precio": None, "pago": None}
+    estado = {"producto": None, "precio": None, "pago": None, "confirmado": False}
 
     # Construir mapa sabor → precio desde catálogo real
     precio_por_sabor = {}
@@ -192,13 +205,16 @@ def _extraer_estado_pedido(historial: list, catalogo: list) -> dict:
     for msg in historial:
         if msg.get("role") != "user":
             continue
-        texto = str(msg.get("content", "")).lower()
+        texto = str(msg.get("content", "")).lower().strip()
 
         # Detectar producto / sabor
         for sabor in _SABORES:
             if sabor in texto:
                 estado["producto"] = sabor
                 estado["precio"] = precio_por_sabor.get(sabor)
+                # Si cambia de sabor, resetear pago y confirmación
+                estado["pago"] = None
+                estado["confirmado"] = False
                 break
 
         # Detectar método de pago
@@ -206,6 +222,15 @@ def _extraer_estado_pedido(historial: list, catalogo: list) -> dict:
             if metodo in texto:
                 estado["pago"] = metodo
                 break
+
+        # Detectar confirmaciones simples ("sí", "dale", "ok"...)
+        # Solo si el mensaje es corto (≤ 4 palabras) — evita falsos positivos
+        palabras = texto.split()
+        if len(palabras) <= 4:
+            for confirmacion in _CONFIRMACIONES:
+                if confirmacion in palabras or texto == confirmacion:
+                    estado["confirmado"] = True
+                    break
 
     return estado
 
@@ -250,36 +275,50 @@ def _enriquecer_historial(historial: list) -> list:
 
     # Estado actual del pedido extraído del historial
     estado = _extraer_estado_pedido(historial, catalogo)
-    producto = estado["producto"]
-    precio   = estado["precio"]
-    pago     = estado["pago"]
+    producto    = estado["producto"]
+    precio      = estado["precio"]
+    pago        = estado["pago"]
+    confirmado  = estado["confirmado"]
+
+    precio_txt = f"{precio:,} pesos".replace(",", ".") if precio else "(ver catálogo)"
 
     if producto and pago:
-        # ─ CASO 3: Cliente ya dio producto Y pago → confirmar venta
-        precio_txt = f"{precio:,} pesos".replace(",", ".") if precio else "(ver catálogo)"
+        # ─ CASO 3: Pedido COMPLETO — producto + pago confirmados
         bloque_estado = (
-            f"\n\n═══ ESTADO ACTUAL DEL PEDIDO (COMPLETO) ═══\n"
+            f"\n\n═══ ESTADO DEL PEDIDO: COMPLETO ═══\n"
             f"producto: {producto}\n"
             f"precio:   {precio_txt}\n"
             f"pago:     {pago}\n"
-            f"════════════════════════════════════════════\n"
-            f"✅ EL PEDIDO ESTÁ COMPLETO.\n"
-            f"RESPONDE SOLO: 'Listo, ya te lo tengo 🎉'\n"
+            f"════════════════════════════════════\n"
+            f"✅ TODO LISTO. RESPONDE SOLO:\n"
+            f"'Listo, ya te lo tengo 🎉'\n"
             f"NO hagas más preguntas."
         )
-    elif producto and not pago:
-        # ─ CASO 2: Cliente eligió producto pero NO ha dicho cómo paga
-        precio_txt = f"{precio:,} pesos".replace(",", ".") if precio else "(ver catálogo)"
+    elif producto and confirmado and not pago:
+        # ─ CASO 2b: Cliente confirmó ("sí", "dale"...) pero no ha dicho cómo paga
         bloque_estado = (
-            f"\n\n═══ ESTADO ACTUAL DEL PEDIDO (PENDIENTE PAGO) ═══\n"
+            f"\n\n═══ ESTADO DEL PEDIDO: CONFIRMADO, PENDIENTE PAGO ═══\n"
+            f"producto:   {producto}\n"
+            f"precio:     {precio_txt}\n"
+            f"confirmado: SÍ\n"
+            f"pago:       (AÚN NO INDICADO)\n"
+            f"═══════════════════════════════════════════════════════\n"
+            f"⚠️ El cliente YA confirmó el pedido.\n"
+            f"SIGUIENTE PASO: preguntar SOLO el método de pago.\n"
+            f"Ejemplo: 'De una 🍦 Son {precio_txt}. ¿Pagas con efectivo o tarjeta?'"
+        )
+    elif producto and not pago:
+        # ─ CASO 2: Tiene producto, sin confirmar ni pagar
+        bloque_estado = (
+            f"\n\n═══ ESTADO DEL PEDIDO: PENDIENTE PAGO ═══\n"
             f"producto: {producto}\n"
             f"precio:   {precio_txt}\n"
             f"pago:     (AÚN NO INDICADO)\n"
-            f"═════════════════════════════════════════════════\n"
+            f"══════════════════════════════════════════\n"
             f"⚠️ SIGUIENTE PASO OBLIGATORIO:\n"
-            f"Confirma el producto y el precio, luego PREGUNTA el método de pago.\n"
+            f"Confirma precio y pregunta método de pago.\n"
             f"Ejemplo: 'Listo, te dejo el de {producto} 🍦 Son {precio_txt}. ¿Pagas con efectivo o tarjeta?'\n"
-            f"❌ NO digas 'Listo ya te lo tengo' hasta que el cliente confirme el pago."
+            f"❌ NO digas 'Listo ya te lo tengo' hasta que el cliente diga cómo paga."
         )
     else:
         # ─ CASO 1: Sin estado — primera interacción
@@ -299,10 +338,37 @@ def _enriquecer_historial(historial: list) -> list:
 
 def responder(historial: list, verbose: bool = False) -> str:
     """
-    Envía el historial a Ollama.
-    NUNCA usa tools — el catálogo está inyectado en el prompt de sistema.
-    Siempre devuelve texto natural, nunca JSON crudo ni leaks técnicos.
+    Responde al cliente con lógica determinística primero (cortocircuito),
+    luego llama a Ollama solo cuando el estado es ambiguo.
+    Esto compensa las limitaciones del modelo pequeño (1B).
     """
+    # ── Lógica determinística ANTES del LLM ──────────────────────────────────
+    # Precargamos catálogo y estado para cortocircuitar el modelo cuando sea
+    # posible y evitar alucinaciones del modelo pequeño.
+    try:
+        catalogo = cargar_catalogo_productos()
+        estado = _extraer_estado_pedido(historial, catalogo)
+        producto   = estado["producto"]
+        precio     = estado["precio"]
+        pago       = estado["pago"]
+        confirmado = estado["confirmado"]
+        precio_txt = f"{precio:,} pesos".replace(",", ".") if precio else "el precio del catálogo"
+
+        # CASO COMPLETO → respuesta directa sin LLM
+        if producto and pago:
+            return f"Listo bro, ya te lo tengo 🎉"
+
+        # CASO CONFIRMACIÓN + PRODUCTO → preguntar pago directamente
+        if producto and confirmado and not pago:
+            return f"De una 🍦 Son {precio_txt}. ¿Pagas con efectivo o tarjeta?"
+
+    except Exception as e:
+        if verbose:
+            print(f"[agente] Error en pre-procesado: {e}")
+        estado = {}  # fallback seguro
+        catalogo = []
+
+    # ── Llamada al LLM (casos ambiguos o primera interacción) ─────────────────
     try:
         historial_enriquecido = _enriquecer_historial(historial)
 
@@ -310,25 +376,30 @@ def responder(historial: list, verbose: bool = False) -> str:
             model=MODELO,
             messages=historial_enriquecido,
             options={
-                "num_predict": 300,
-                "temperature": 0.75,
-                "top_p": 0.9,
-                "repeat_penalty": 1.1,
+                "num_predict": 200,
+                "temperature": 0.6,
+                "top_p": 0.85,
+                "repeat_penalty": 1.15,
             }
         )
 
         contenido = response.message.content or ""
+        resultado = _limpiar_respuesta(contenido)
 
-        # Bloquear cualquier leak técnico
-        return _limpiar_respuesta(contenido)
+        # Si el LLM aún devuelve algo técnico, usar fallback contextual
+        if resultado == _RESPUESTA_FALLBACK_CONEXION or not resultado.strip():
+            return _fallback_inteligente(estado)
+
+        return resultado
 
     except Exception as e:
         err = str(e).lower()
         if verbose:
             print(f"[agente] Error en Ollama: {e}")
         if "connect" in err or "refused" in err:
-            return "Uy bro, no me puedo conectar ahora. ¿Está Ollama abierto?"
-        return _RESPUESTA_FALLBACK
+            return _RESPUESTA_FALLBACK_CONEXION
+        # Fallback contextual en lugar del mensaje de error técnico
+        return _fallback_inteligente(estado)
 
 
 # ─────────────────────────────────────────────
