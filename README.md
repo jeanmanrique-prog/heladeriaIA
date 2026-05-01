@@ -251,7 +251,7 @@ python -m uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload
 ### Terminal 3: Servidor MCP
 
 ```bash
-python servidor_mcp.py
+python mcp/server.py
 ```
 
 ### Terminal 4: Pipeline local de voz
@@ -358,7 +358,7 @@ Se usa `SQLite` para:
 - Si la Raspberry tiene pocos recursos, cierra procesos que no uses.
 - La transcripcion y sintesis de voz consumen CPU.
 - Si solo quieres probar inventario y compras manuales, puedes dejar para despues la optimizacion de voz.
-- No uses `python -m mcp.server` para este proyecto. Ese comando entra al modulo local `mcp/server.py` y choca con la libreria externa `mcp`. El punto de entrada correcto es `python servidor_mcp.py`.
+- No uses `python -m mcp.server` para este proyecto. Ese comando entra al modulo local `mcp/server.py` y choca con la libreria externa `mcp`. El punto de entrada correcto es `python mcp/server.py`, el cual ya incluye la logica para evitar este conflicto.
 - Si cambias la IP o separas servicios en varias maquinas, debes actualizar las URLs locales definidas en:
   - `mcp/config.py`
   - `app/utils/peticiones.py`

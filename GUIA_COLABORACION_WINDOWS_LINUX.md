@@ -34,7 +34,7 @@ No deben borrarlos.
 
 - `app/main.py`: frontend principal en Streamlit
 - `api/main.py`: backend en FastAPI
-- `servidor_mcp.py`: punto de entrada correcto para el servidor MCP
+- `mcp/server.py`: punto de entrada correcto para el servidor MCP
 - `mcp/`: logica de IA, voz, prompts y tools
 - `db/database.py`: inicializacion de base de datos
 - `iniciar.bat`: arranque rapido para Windows
@@ -42,7 +42,7 @@ No deben borrarlos.
 Importante:
 
 - No usar `python -m mcp.server`
-- En este repo el comando correcto es `python servidor_mcp.py`
+- En este repo el comando correcto es `python mcp/server.py`
 - `app/main.py.bak` es un backup, no es el archivo de arranque
 
 ## Clonar el repositorio
@@ -209,7 +209,7 @@ python -m uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload
 Terminal 3:
 
 ```powershell
-python servidor_mcp.py
+python mcp/server.py
 ```
 
 Terminal 4:
@@ -332,7 +332,7 @@ python -m uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload
 Terminal 3:
 
 ```bash
-python servidor_mcp.py
+python mcp/server.py
 ```
 
 Terminal 4:
@@ -414,7 +414,7 @@ Causa:
 Solucion:
 
 ```bash
-python servidor_mcp.py
+python mcp/server.py
 ```
 
 ### Error con Ollama
@@ -454,7 +454,7 @@ python db/database.py
 - backend: `api/`
 - IA y voz: `mcp/`
 - inicio del frontend: `app/main.py`
-- servidor MCP: `servidor_mcp.py`
+- servidor MCP: `mcp/server.py`
 
 ## Nota final
 

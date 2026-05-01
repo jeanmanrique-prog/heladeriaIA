@@ -1,26 +1,59 @@
 """
 Servidor MCP — Heladería
-Expone las herramientas de la heladería como un servidor MCP estándar
-para que cualquier agente compatible (IA de Gelateria Urbana u otros) las consuma.
+Expone las herramientas de la heladería como un servidor MCP estándar.
 
-Uso:
-    python mcp/server.py
-
-Requiere:
-    - API corriendo en http://127.0.0.1:8000
-    - pip install mcp requests
+Este archivo incluye una lógica para evitar el conflicto de nombres entre
+la carpeta local 'mcp/' y la librería externa 'mcp'.
 """
 
 import sys
 import asyncio
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
-from mcp import types
+import importlib
+from pathlib import Path
 
+# --- Lógica de resolución de conflictos de nombres ---
+def _obtener_mcp_runtime():
+    """Importa la librería externa mcp evitando el conflicto con la carpeta local."""
+    # Guardamos los paths originales que podrían causar conflicto
+    root_dir = str(Path(__file__).resolve().parent.parent)
+    mcp_dir = str(Path(__file__).resolve().parent)
+    
+    removed = []
+    for p in [root_dir, mcp_dir, ""]:
+        while p in sys.path:
+            sys.path.remove(p)
+            removed.append(p)
+            
+    try:
+        # Importamos lo que necesitamos de la librería externa
+        mcp_server_mod = importlib.import_module("mcp.server")
+        mcp_stdio_mod = importlib.import_module("mcp.server.stdio")
+        mcp_types_mod = importlib.import_module("mcp.types")
+        return mcp_server_mod.Server, mcp_stdio_mod.stdio_server, mcp_types_mod
+    finally:
+        # Restauramos los paths para que las importaciones locales funcionen
+        for p in reversed(removed):
+            sys.path.insert(0, p)
+
+# Cargamos el runtime antes de las importaciones locales
+Server, stdio_server, types = _obtener_mcp_runtime()
+
+# --- Importaciones locales ---
+# Ahora que restauramos el path, podemos importar mcp.config y mcp.tools
 from mcp.config import API_URL
-from mcp.tools.inventario_tools import consultar_inventario_tool, consultar_alertas_tool, agregar_stock_tool, consultar_movimientos_tool
+from mcp.tools.inventario_tools import (
+    consultar_inventario_tool, 
+    consultar_alertas_tool, 
+    agregar_stock_tool, 
+    consultar_movimientos_tool
+)
 from mcp.tools.productos_tools import consultar_productos_tool, consultar_sabores_tool
-from mcp.tools.ventas_tools import registrar_venta_tool, consultar_ventas_tool, consultar_detalle_venta_tool, resumen_negocio_tool
+from mcp.tools.ventas_tools import (
+    registrar_venta_tool, 
+    consultar_ventas_tool, 
+    consultar_detalle_venta_tool, 
+    resumen_negocio_tool
+)
 
 server = Server("heladeria-mcp")
 
@@ -113,7 +146,6 @@ async def handle_list_tools() -> list[types.Tool]:
             inputSchema={"type": "object", "properties": {}}
         )
     ]
-
 
 @server.call_tool()
 async def handle_call_tool(name: str, arguments: dict | None) -> list[types.TextContent]:

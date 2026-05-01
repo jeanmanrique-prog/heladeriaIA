@@ -17,6 +17,8 @@ def detectar_intencion(texto: str) -> str:
         return "inventario"
     if es_intencion_alertas(t):
         return "alertas"
+    if es_intencion_recomendacion(t):
+         return "recomendacion"
     if es_intencion_ventas(t):
         return "ventas"
     if es_intencion_movimientos(t):
@@ -77,6 +79,10 @@ def es_intencion_movimientos(t: str) -> bool:
 def es_intencion_resumen(t: str) -> bool:
     return any(p in t for p in ("resumen", "reporte", "estado del negocio"))
 
+def es_intencion_recomendacion(t: str) -> bool:
+     patrones = ("recomienda", "recomiendas", "sugieres", "sugiere", "que me recomiendas", "que sabor es bueno", "cual es el mejor", "cual me llevo", "no se cual", "no me decido")
+     return any(p in t for p in patrones)
+ 
 def es_intencion_agregar_stock(t: str) -> bool:
     patrones = ("agregar stock", "agrega stock", "anadir stock", "reponer", "abastecer")
     return any(p in t for p in patrones)

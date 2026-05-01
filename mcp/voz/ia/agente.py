@@ -20,6 +20,7 @@ from mcp.resources.contexto_resource import ContextoResource
 # Herramientas (Tools) - Capa de acciones reales
 from mcp.tools.catalog_tools import obtener_catalogo_real
 from api.ia.estado import GestorEstado
+from .intencion import detectar_intencion
 
 # ─────────────────────────────────────────────
 # CONSTANTES DE FILTRADO
@@ -65,23 +66,9 @@ def normalizar_texto_usuario_voz(texto: str) -> str:
         texto = re.sub(patron, reemplazo, texto)
     return re.sub(r"\s+", " ", texto).strip()
 
-def _es_saludo_simple(t: str) -> bool:
-    saludos = {"hola", "buenas", "buenos dias", "buenas tardes", "buenas noches", "hey", "saludos"}
-    return t in saludos
-
-def _es_intencion_catalogo(t: str) -> bool:
-    patrones = ("que hay", "que tienen", "que sabores", "que productos", "menu", "catalogo", "disponible")
-    return any(p in t for p in patrones)
-
-def _es_intencion_pago(t: str) -> bool:
-    if t in {"efectivo", "tarjeta"}: return True
-    return bool(re.search(r"\b(pago|pagar|metodo|forma|cobrar|efectivo|tarjeta)\b", t))
-
-def _es_intencion_pedido(t: str) -> bool:
-    if _es_intencion_catalogo(t) or _es_intencion_pago(t): return False
-    claves = ("quiero", "dame", "me das", "pedido", "pedir", "vender", "helado", "tarro")
-    if any(k in t for k in claves): return True
-    return bool(re.search(r"\b(un|una|uno|dos|tres|cuatro|cinco|\d+)\s+de\s+\w+\b", t))
+# ─────────────────────────────────────────────
+# ELIMINADAS FUNCIONES REDUNDANTES (Se usa intencion.py)
+# ─────────────────────────────────────────────
 
 _RESPUESTA_FALLBACK_CONEXION = "Uy bro, no me puedo conectar ahora. ¿Está Ollama abierto?"
 _RESPUESTA_FALLBACK = "Uy, ahí se enredó la cosa. ¿Me repites?"
@@ -234,6 +221,29 @@ _METODOS_PAGO   = ["efectivo", "tarjeta", "nequi", "daviplata"]
 _CONFIRMACIONES = ["si", "sí", "dale", "ok", "listo", "de una", "hágale", "hagale", "claro", "perfecto", "bueno"]
 
 
+def _extraer_sabor_de_mensaje_asistente(historial: list, catalogo_map: dict) -> Optional[str]:
+    """
+    Busca el sabor mencionado por el ASISTENTE en el historial.
+    Prioriza el ÚLTIMO sabor mencionado en el último mensaje para evitar ambigüedades.
+    """
+    for m in reversed(historial):
+        if m.get("role") in ("assistant", "model"):
+            texto_asistente = normalizar_texto_usuario_voz(m.get("content", ""))
+            # Encontrar todas las ocurrencias de sabores y su posición
+            encontrados = []
+            for sabor in catalogo_map:
+                if len(sabor) > 3:
+                    pos = texto_asistente.rfind(sabor) # Buscar la última ocurrencia
+                    if pos != -1:
+                        encontrados.append((pos, sabor))
+            
+            if encontrados:
+                # Retornar el sabor que aparece más al final del texto
+                encontrados.sort(key=lambda x: x[0], reverse=True)
+                return encontrados[0][1]
+    return None
+
+
 def _extraer_estado_pedido(historial: list, catalogo: list, session_id: Optional[str] = None) -> dict:
     """
     Máquina de estados estricta: inicio → esperando_pago → completado.
@@ -266,16 +276,33 @@ def _extraer_estado_pedido(historial: list, catalogo: list, session_id: Optional
     if msg_usuario:
         paso_actual = estado.get("paso", "inicio")
 
-        # PASO INICIO / COMPLETADO → buscar nuevo sabor
+        # PASO INICIO / COMPLETADO → buscar nuevo sabor en el mensaje del usuario
         if paso_actual in ("inicio", "completado"):
+            sabor_encontrado = None
             for sabor, datos in catalogo_map.items():
                 if sabor in msg_usuario and len(sabor) > 3:
+                    sabor_encontrado = sabor
                     estado["producto"]   = sabor
                     estado["precio"]     = datos["precio"]
                     estado["pago"]       = None
                     estado["confirmado"] = False
                     estado["paso"]       = "esperando_pago"
                     break
+
+            # 🆕 FIX: Si el usuario confirmó ("si", "dale", "ok") sin mencionar sabor
+            # → buscar el sabor recomendado en el último mensaje del ASISTENTE
+            if not sabor_encontrado:
+                es_confirmacion = any(conf == msg_usuario or conf in msg_usuario.split()
+                                      for conf in _CONFIRMACIONES)
+                if es_confirmacion:
+                    sabor_asistente = _extraer_sabor_de_mensaje_asistente(historial, catalogo_map)
+                    if sabor_asistente and sabor_asistente in catalogo_map:
+                        datos = catalogo_map[sabor_asistente]
+                        estado["producto"]   = sabor_asistente
+                        estado["precio"]     = datos["precio"]
+                        estado["pago"]       = None
+                        estado["confirmado"] = False
+                        estado["paso"]       = "esperando_pago"
 
         # PASO ESPERANDO_PAGO → buscar método de pago SOLAMENTE
         elif paso_actual == "esperando_pago":
@@ -312,8 +339,14 @@ def _enriquecer_historial(historial: list, session_id: Optional[str] = None) -> 
     catalogo_txt = CatalogResource.get_catalog_text()
     contexto_txt = ContextoResource.get_context_text(session_id) if session_id else ""
 
-    # 2. Prompts (cerebro conversacional)
-    prompts_ia = PROMPT_ESTADO + PROMPT_PAGOS + PROMPT_SUGERENCIAS
+    # 2. Prompts (cerebro conversacional completo)
+    prompts_ia = (
+        SYSTEM_PROMPT + "\n" + 
+        SYSTEM_PROMPT_VENDEDOR + "\n" + 
+        PROMPT_ESTADO + "\n" + 
+        PROMPT_PAGOS + "\n" + 
+        PROMPT_SUGERENCIAS
+    )
 
     # 3. Bloque de contexto completo
     extra = f"\n\n{prompts_ia}\n\n{catalogo_txt}\n\n{contexto_txt}"
@@ -366,10 +399,13 @@ def responder_vendedor_json(historial: list, verbose: bool = False, session_id: 
     if not msg_usuario:
         return json.dumps({"accion": "saludo", "mensaje": "¡Hola! ¿Qué helado te provoca hoy? 🍦"})
 
-    if _es_saludo_simple(msg_usuario):
+    # Usar el motor centralizado de intenciones
+    intencion = detectar_intencion(msg_usuario)
+
+    if intencion == "saludo":
         return json.dumps({"accion": "saludo", "mensaje": "Bienvenido a Gelateria Urbana, bro. ¿Qué sabor te empaco hoy? 😎"})
 
-    if _es_intencion_catalogo(msg_usuario):
+    if intencion == "catalogo":
         productos = [
             {"id_producto": p.get("id_producto"), "sabor": p.get("sabor"), "precio": p.get("precio_unitario")}
             for p in catalogo if int(p.get("stock") or 0) > 0
@@ -379,6 +415,53 @@ def responder_vendedor_json(historial: list, verbose: bool = False, session_id: 
             "mensaje": "Aquí tienes lo que tengo disponible ahora:",
             "productos": productos
         }, ensure_ascii=False)
+
+    if intencion == "recomendacion":
+        # Lógica de variedad: no recomendar lo mismo que ya se recomendó
+        sabores_vistos = set()
+        for m in historial:
+            if m.get("role") in ("assistant", "model"):
+                t_low = m.get("content", "").lower()
+                for p in catalogo:
+                    s_low = str(p.get("sabor", "")).lower()
+                    if s_low and s_low in t_low:
+                        sabores_vistos.add(s_low)
+        
+        # Prioridad: Chocolate -> Fresa -> Otros
+        prioridad = ["chocolate", "fresa"]
+        seleccionado = None
+        
+        # 1. Intentar con prioridad que no se haya visto
+        for p_sabor in prioridad:
+            if p_sabor not in sabores_vistos:
+                for p in catalogo:
+                    if str(p.get("sabor", "")).lower() == p_sabor and int(p.get("stock") or 0) > 0:
+                        seleccionado = p.get("sabor")
+                        break
+            if seleccionado: break
+            
+        # 2. Si no, cualquier otro con stock que no se haya visto
+        if not seleccionado:
+            for p in catalogo:
+                s_cand = str(p.get("sabor", "")).lower()
+                if int(p.get("stock") or 0) > 0 and s_cand not in sabores_vistos:
+                    seleccionado = p.get("sabor")
+                    break
+                    
+        # 3. Si ya se recomendaron todos, repetir el primero de prioridad que tenga stock
+        if not seleccionado:
+            for p_sabor in prioridad:
+                for p in catalogo:
+                    if str(p.get("sabor", "")).lower() == p_sabor and int(p.get("stock") or 0) > 0:
+                        seleccionado = p.get("sabor")
+                        break
+                if seleccionado: break
+
+        if seleccionado:
+            return json.dumps({
+                "accion": "informacion",
+                "mensaje": f"¡Te recomiendo el de {seleccionado}! Es el que más están llevando hoy. ¿Te va bien? 🍦"
+            }, ensure_ascii=False)
 
     # ── ESTADO PERSISTENTE (fuente de verdad) ─────────────────────────────────
     estado = _extraer_estado_pedido(historial, catalogo, session_id=session_id)

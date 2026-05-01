@@ -17,7 +17,7 @@ start "API_Backend" cmd /k "python -m uvicorn api.main:app --host 127.0.0.1 --po
 timeout /t 3 /nobreak > nul
 
 echo [3/5] Iniciando Servidor MCP...
-start "Servidor_MCP" cmd /k "python servidor_mcp.py"
+start "Servidor_MCP" cmd /k "python mcp/server.py"
 timeout /t 2 /nobreak > nul
 
 echo [4/5] Iniciando Orquestador de Voz...
