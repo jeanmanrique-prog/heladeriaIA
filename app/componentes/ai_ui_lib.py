@@ -96,7 +96,7 @@ def get_ai_call_html(
     scrollbar-width: thin;
     scrollbar-color: rgba(42, 26, 26, 0.3) transparent;
   }}
-  /* Contenedor de imagen pegado al borde derecho - SIN BORDE */
+  /* Contenedor de imagen pegado al borde derecho */
   .image-container {{
     width: 35%;
     max-width: 600px;
@@ -105,7 +105,7 @@ def get_ai_call_html(
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px;
+    padding: 0;
     border-radius: 0;
     box-shadow: none;
     border: none;
@@ -114,6 +114,7 @@ def get_ai_call_html(
     width: 100%;
     height: 100%;
     object-fit: contain;
+    object-position: center;
   }}
   .main-container::-webkit-scrollbar {{
     width: 8px;
@@ -145,60 +146,85 @@ def get_ai_call_html(
     50%      {{ box-shadow:0 0 0 12px rgba(168,18,74,0.08); }}
   }}
   /* ── Título / Status ── */
-  .title  {{ text-align:center; color:{accent_color}; font-size:1.1rem; font-weight:800; margin-bottom:3px; }}
-  .status {{ text-align:center; color:{text_color}; font-size:0.83rem; font-weight:600;
-             min-height:18px; margin-bottom:8px; opacity: 0.8; }}
+  .call-header-pill {{
+      background-color: #e91e63;
+      color: #ffffff;
+      padding: 8px 25px;
+      border-radius: 50px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 800;
+      font-size: 1rem;
+      margin-bottom: 25px;
+      box-shadow: 0 4px 10px rgba(233, 30, 99, 0.3);
+  }}
+
+  .call-title {{ color: #e91e63; font-size: 2.2rem; font-weight: 900; margin-bottom: 5px; text-align: center; }}
+  .call-subtitle {{ color: #e91e63; font-size: 1.1rem; font-weight: bold; margin-bottom: 30px; text-align: center; }}
+  
+  .status-pill {{
+      background-color: #ffffff;
+      border: 1px solid #f8bbd0;
+      border-radius: 50px;
+      padding: 5px 15px;
+      color: #2ecc71; /* Green color for 'escuchando' */
+      font-size: 0.9rem;
+      font-weight: bold;
+      display: inline-block;
+      margin-top: 15px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  }}
+
+  .timer {{
+      font-size: 1.8rem;
+      font-weight: 900;
+      color: #333;
+      margin-top: 25px;
+      text-align: center;
+  }}
+
   /* ── Barras VAD ── */
-  .viz {{ display:flex; justify-content:center; gap:3px; height:26px;
-          align-items:center; margin-bottom:8px; }}
-  .vb  {{ width:4px; border-radius:2px; background:{accent_color}; height:4px;
+  .viz {{ display:flex; justify-content:center; gap:5px; height:36px;
+          align-items:center; margin-bottom:10px; margin-top: 20px; }}
+  .vb  {{ width:6px; border-radius:3px; background:#e91e63; height:6px;
           transition:height 0.07s ease; }}
-  /* ── Live transcript ── */
-  .live {{
-    background:{live_bg}; border:1px solid {border_color}; border-radius:8px;
-    padding:6px 10px; font-size:0.8rem; color:{hist_text}; min-height:26px;
-    margin-bottom:8px; font-style:italic; transition:all 0.2s;
+
+  /* ── Live transcript & Historial (Hidden to match mockup) ── */
+  .live {{ display: none; }}
+  .hist {{ display: none; }}
+
+  /* ── Botones Circulares ── */
+  .circle-btn-container {{
+      display: flex; justify-content: center; align-items: center; gap: 40px; margin-top: 50px;
   }}
-  /* ── Historial ── */
-  .hist {{
-    background:{hist_bg}; border:1px solid {border_color}; border-radius:12px;
-    padding:12px 15px; height:320px; overflow-y:auto; font-size:0.95rem;
-    margin-bottom:15px; scroll-behavior:smooth;
-    color: {hist_text};
-    /* Barra de desplazamiento estilo Streamlit */
-    scrollbar-width: thin;
-    scrollbar-color: rgba(168, 12, 74, 0.2) transparent;
+  .circle-btn {{
+      width: 70px; height: 70px; border-radius: 50%;
+      background-color: #ffffff; border: 1px solid #f0f0f0;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; color: #333; font-size: 1.5rem;
+      transition: all 0.2s;
   }}
-  .hist::-webkit-scrollbar {{
-    width: 6px;
+  .circle-btn:hover {{ transform: scale(1.05); }}
+  .circle-btn.start-call {{
+      width: 90px; height: 90px; background-color: #e91e63; color: white; border: none; font-size: 2.2rem;
   }}
-  .hist::-webkit-scrollbar-thumb {{
-    background-color: rgba(168, 12, 74, 0.2);
-    border-radius: 10px;
+  .circle-btn.end-call {{
+      width: 90px; height: 90px; background-color: #e91e63; color: white; border: none; font-size: 2.2rem;
   }}
-  .msg {{ margin-bottom:10px; line-height:1.45; }}
-  .ia {{ color:#ff4d94; font-weight: 700; }} 
-  .usr {{ color:{hist_text}; }}
-  .msg.ia b {{ color: #ff1493; }}
-  /* ── Botones ── */
-  .btn-row {{ display:flex; gap:8px; }}
-  .btn {{
-    flex:1; padding:8px 0; border:none; border-radius:20px; cursor:pointer;
-    font-weight:800; font-size:0.88rem; transition:opacity 0.15s;
-    font-family: 'Permanent Marker', cursive, sans-serif;
+  .circle-btn-label {{
+      text-align: center; font-size: 0.85rem; color: #333; margin-top: 12px; font-weight: bold;
   }}
-  .btn:hover {{ opacity:0.88; }}
-  .btn-start {{ background:linear-gradient(135deg,{accent_color},#ff4d94); color:#fff; }}
-  .btn-end   {{ background:linear-gradient(135deg,#d03050,#e05070); color:#fff; display:none; }}
-  .btn-new   {{ background:linear-gradient(135deg,{accent_color},#ff4d94); color:#fff; display:none; }}
+
   /* ── Error permiso ── */
   .err {{ background:#ffeaea; border:1px solid #cc2222; border-radius:8px;
           padding:8px; font-size:0.78rem; color:#990000; text-align:center;
           margin-top:8px; display:none; }}
   /* ── Indicador micrófono ── */
-  .mic-dot {{ display:inline-block; width:7px; height:7px; border-radius:50%;
-               background:#aaa; margin-right:4px; vertical-align:middle; }}
-  .mic-dot.on  {{ background:#22cc66; animation:dot-blink 1s infinite; }}
+  .mic-dot {{ display:inline-block; width:8px; height:8px; border-radius:50%;
+               background:#aaa; margin-right:6px; vertical-align:middle; }}
+  .mic-dot.on  {{ background:#2ecc71; animation:dot-blink 1s infinite; }}
   .mic-dot.off {{ background:#e05070; }}
   .mic-dot.proc{{ background:#f0a020; animation:dot-blink 0.4s infinite; }}
   @keyframes dot-blink {{ 0%,100%{{opacity:1;}} 50%{{opacity:0.25;}} }}
@@ -208,39 +234,62 @@ def get_ai_call_html(
 <div class="app-layout">
 <div class="main-container">
 
-<div class="av-wrap">
-  <div class="av-circle" id="avCircle">
-    {"<img src='" + avatar_src + "'>" if avatar_src.startswith("data:") else "🍦"}
-  </div>
+<div style="text-align:center;">
+    <div class="call-header-pill">
+        📞 LLAMADA EN CURSO
+    </div>
 </div>
 
-<div class="title">Urban: Dulzura Callejera</div>
-<div class="status" id="statusEl">
-  <span class="mic-dot" id="micDot"></span><span id="statusTxt">Iniciando...</span>
+<div class="call-title">Hablando con IA</div>
+<div class="call-subtitle">Dulzura Callejera</div>
+
+<div style="display: flex; align-items: center; justify-content: center; gap: 20px;">
+    <div class="viz" id="vizEl_left">
+      {"".join(f'<div class="vb" id="vb_l_{i}"></div>' for i in range(5))}
+    </div>
+
+    <div class="av-wrap">
+      <div class="av-circle" id="avCircle">
+        {"<img src='" + avatar_src + "'>" if avatar_src.startswith("data:") else "🍦"}
+      </div>
+    </div>
+
+    <div class="viz" id="vizEl_right">
+      {"".join(f'<div class="vb" id="vb_r_{i}"></div>' for i in range(5))}
+    </div>
 </div>
 
-<div class="viz" id="vizEl">
-  {"".join(f'<div class="vb" id="vb{i}"></div>' for i in range(11))}
+<div class="timer" id="callTimer">00:00</div>
+
+<div style="text-align:center;">
+    <div class="status-pill" id="statusEl">
+      <span class="mic-dot" id="micDot"></span><span id="statusTxt" style="color: #2ecc71;">IA escuchando...</span>
+    </div>
 </div>
 
-<div class="live" id="liveEl">Tu voz aparecerá aquí en tiempo real...</div>
+<div class="live" id="liveEl"></div>
+<div class="hist" id="histEl"></div>
 
-<div class="hist" id="histEl">
-  <div class="msg ia"><b>🍦 Urban:</b> Iniciando conversación...</div>
-</div>
-
-<div class="btn-row">
-  <button class="btn btn-start" id="btnStart" onclick="startCall()">▶️ Iniciar Llamada</button>
-  <button class="btn btn-end"   id="btnEnd"   onclick="endCall()">🔴 Finalizar</button>
-  <button class="btn btn-new"   id="btnNew"   onclick="newCall()">🔄 Nueva</button>
+<div class="circle-btn-container">
+    <div>
+        <button class="circle-btn">🔇</button>
+        <div class="circle-btn-label">Silenciar</div>
+    </div>
+    <div>
+        <button class="circle-btn start-call" id="btnStart" onclick="startCall()">📞</button>
+        <button class="circle-btn end-call" id="btnEnd" onclick="endCall()" style="display:none;">📞</button>
+        <div class="circle-btn-label" id="mainBtnLabel">Iniciar llamada</div>
+    </div>
+    <div>
+        <button class="circle-btn">🔊</button>
+        <div class="circle-btn-label">Altavoz</div>
+    </div>
 </div>
 <div class="err" id="errEl"></div>
 
 </div> <!-- end main-container -->
 
-<div class="image-container">
-  <img src="{urban_src}" alt="Urban Comiendo">
-</div>
+{f'<div class="image-container"><img src="{urban_src}"></div>' if urban_src else ''}
 
 </div> <!-- end app-layout -->
 
@@ -250,8 +299,8 @@ def get_ai_call_html(
 // ═══════════════════════════════════════════════════
 const API_URL        = "{api_url}";
 const SILENCE_MS     = 700;    // ms de silencio para enviar (0.7s)
-const SPEECH_THR     = 22;     // umbral de energía para voz (0-255)
-const SILENCE_THR    = 13;     // umbral de silencio
+const SPEECH_THR     = 55;     // ALTO: umbral de energía para voz (ignorar voces lejanas)
+const SILENCE_THR    = 30;     // ALTO: umbral de silencio
 const MIN_SPEECH_MS  = 300;    // mínimo de habla para procesar
 const CHUNK_INTERVAL = 80;     // ms del tick de VAD
 
@@ -273,6 +322,16 @@ let speechStartTs   = 0;        // timestamp inicio de habla
 let currentSrc      = null;     // AudioBufferSourceNode actual (para interrumpir)
 let vadTimer        = null;
 let freshStart      = {"true" if is_fresh else "false"};  // ¿llamada nueva?
+
+let callTimerInterval = null;
+let callSeconds       = 0;
+
+function updateTimer() {{
+    callSeconds++;
+    const m = String(Math.floor(callSeconds / 60)).padStart(2, '0');
+    const s = String(callSeconds % 60).padStart(2, '0');
+    document.getElementById('callTimer').textContent = m + ':' + s;
+}}
 
 // ═══════════════════════════════════════════════════
 // UI HELPERS
@@ -302,27 +361,28 @@ function clearHistory() {{
 }}
 
 function animBars(energy) {{
-  for (let i = 0; i < 11; i++) {{
-    const b = document.getElementById('vb' + i);
-    if (!b) continue;
+  for (let i = 0; i < 5; i++) {{
+    const bL = document.getElementById('vb_l_' + i);
+    const bR = document.getElementById('vb_r_' + i);
     let h;
     if (isAiSpeaking) {{
-      // IA hablando: barras animadas estéticamente
-      h = 6 + Math.abs(Math.sin((Date.now() / 200) + i * 0.7)) * 20;
+      h = 8 + Math.abs(Math.sin((Date.now() / 200) + i * 0.7)) * 24;
     }} else if (isSpeaking) {{
-      // Usuario hablando: barras reactivas al audio
-      h = Math.min(26, energy * 0.55 + Math.random() * 3);
+      h = Math.min(32, energy * 0.6 + Math.random() * 4);
     }} else {{
-      h = 4;
+      h = 6;
     }}
-    b.style.height = h + 'px';
+    if (bL) bL.style.height = h + 'px';
+    if (bR) bR.style.height = h + 'px';
   }}
 }}
 
 function resetBars() {{
-  for (let i = 0; i < 11; i++) {{
-    const b = document.getElementById('vb' + i);
-    if (b) b.style.height = '4px';
+  for (let i = 0; i < 5; i++) {{
+    const bL = document.getElementById('vb_l_' + i);
+    const bR = document.getElementById('vb_r_' + i);
+    if (bL) bL.style.height = '6px';
+    if (bR) bR.style.height = '6px';
   }}
 }}
 
@@ -519,7 +579,7 @@ async function fetchGreeting(sid) {{
   }} catch(e) {{
     console.warn('[Greeting] Fallback local:', e);
     clearHistory();
-    addMsg('ia', 'Ey parcero bienvenido a Gelateria Urban los mejores helados de Colombia, bro. Que se te antoja hoy?');
+    addMsg('ia', '¡Hola! Bienvenido a Gelatería Urbana, los mejores helados de Colombia. ¿Qué te preparo hoy?');
     setStatus('🎤 Escuchando...', 'on');
   }}
 }}
@@ -530,7 +590,15 @@ async function fetchGreeting(sid) {{
 async function startCall() {{
   document.getElementById('btnStart').style.display = 'none';
   document.getElementById('btnEnd').style.display   = 'flex';
-  document.getElementById('btnNew').style.display   = 'flex';
+  const newBtn = document.getElementById('btnNew');
+  if (newBtn) newBtn.style.display = 'none';
+  const mainLbl = document.getElementById('mainBtnLabel');
+  if (mainLbl) mainLbl.textContent = 'Finalizar llamada';
+  
+  callSeconds = 0;
+  document.getElementById('callTimer').textContent = '00:00';
+  if (callTimerInterval) clearInterval(callTimerInterval);
+  callTimerInterval = setInterval(updateTimer, 1000);
 
   try {{
     stream   = await navigator.mediaDevices.getUserMedia({{ audio:true, video:false }});
@@ -564,6 +632,8 @@ function endCall() {{
   isRunning = false;
   clearInterval(vadTimer);
   clearTimeout(silenceTimer);
+  if (callTimerInterval) clearInterval(callTimerInterval);
+  
   stopCurrentAudio();
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {{
     try {{ mediaRecorder.stop(); }} catch(e) {{}}
@@ -573,9 +643,14 @@ function endCall() {{
   resetBars();
   setStatus('📵 Llamada finalizada', 'off');
   liveEl.textContent = 'Llamada finalizada.';
+  
   document.getElementById('btnEnd').style.display = 'none';
-  document.getElementById('btnNew').style.display = 'none';
+  const newBtn = document.getElementById('btnNew');
+  if (newBtn) newBtn.style.display = 'none';
   document.getElementById('btnStart').style.display = 'flex';
+  const mainLbl = document.getElementById('mainBtnLabel');
+  if (mainLbl) mainLbl.textContent = 'Iniciar Llamada';
+  
   isRunning = false;
 }}
 

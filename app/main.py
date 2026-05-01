@@ -14,6 +14,19 @@ root_path = str(Path(__file__).resolve().parent.parent)
 if root_path not in sys.path:
     sys.path.append(root_path)
 
+import importlib
+try:
+    import mcp.config
+    import mcp.prompts.prompt_ventas
+    import mcp.voz.ia.agente
+    import mcp.voz.pipeline.pipeline_voz
+    importlib.reload(mcp.config)
+    importlib.reload(mcp.prompts.prompt_ventas)
+    importlib.reload(mcp.voz.ia.agente)
+    importlib.reload(mcp.voz.pipeline.pipeline_voz)
+except Exception:
+    pass
+
 # Utilidades y Gestión de Estado (Rutas locales para Streamlit)
 
 from utils.session_manager import SessionManager

@@ -23,7 +23,6 @@ def _render_chat_page(api_ok: bool, theme: dict):
 
     with col_chat:
         st.markdown('<div style="padding: 40px 10% 40px 10%;">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">💬 Chat Admin</div>', unsafe_allow_html=True)
         render_chat_interface(api_ok=api_ok, theme=theme)
         st.markdown('</div>', unsafe_allow_html=True)
 

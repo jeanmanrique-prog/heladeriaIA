@@ -7,6 +7,10 @@ from mcp.config import MODELO, API_URL
 from mcp.prompts.prompt_base import SYSTEM_PROMPT, SYSTEM_PROMPT_VENDEDOR
 from ..procesamiento.normalizacion import normalizar_texto_base
 
+# catalog.py es un módulo aislado: SIN dependencia de mcp.types ni inventario_tools
+# Esto evita el ImportError al iniciar la app Streamlit
+from mcp.tools.catalog import get_catalog
+
 # ─────────────────────────────────────────────
 # CONSTANTES DE FILTRADO
 # ─────────────────────────────────────────────
@@ -41,27 +45,43 @@ def verificar_ollama() -> tuple[bool, str]:
 
 
 # ─────────────────────────────────────────────
-# CATÁLOGO DE PRODUCTOS
+# CATÁLOGO DE PRODUCTOS — usa get_catalog() con fallback SQLite
 # ─────────────────────────────────────────────
 
 def cargar_catalogo_productos() -> list:
-    try:
-        r = requests.get(f"{API_URL}/productos", timeout=4)
-        return r.json().get("productos", [])
-    except Exception:
-        return []
+    """
+    Carga el catálogo real.
+    Prioridad: API REST → SQLite directo (via get_catalog).
+    NUNCA retorna lista vacía si hay datos en la BD.
+    """
+    return get_catalog()
 
 
 def _construir_catalogo_texto(catalogo: list) -> str:
+    """Formatea el catálogo en texto claro para inyectar al prompt.
+    Garantiza que precio y stock nunca sean None."""
     if not catalogo:
-        return "No hay productos disponibles."
+        return "⚠️ No hay productos disponibles en este momento."
     lineas = []
     for p in catalogo:
-        stock_txt = f"{p['stock']} uds" if p.get('stock', 0) > 0 else "AGOTADO"
-        precio = p.get('precio_unitario', '?')
+        # Normalizar campos — nunca None
+        nombre = str(p.get('nombre_producto') or p.get('nombre') or 'Producto sin nombre')
+        sabor = str(p.get('sabor') or '?')
+        precio_raw = p.get('precio_unitario') or p.get('precio') or 0
+        try:
+            precio = float(precio_raw)
+        except (TypeError, ValueError):
+            precio = 0.0
+        stock_raw = p.get('stock') or p.get('cantidad_unidades') or 0
+        try:
+            stock = int(stock_raw)
+        except (TypeError, ValueError):
+            stock = 0
+        stock_txt = f"{stock} uds" if stock > 0 else "AGOTADO"
+        id_prod = p.get('id_producto', '?')
         lineas.append(
-            f"• {p['nombre_producto']} | Sabor: {p.get('sabor', '?')} | "
-            f"Precio: {precio:,.0f} pesos COP | Stock: {stock_txt} | ID: {p['id_producto']}"
+            f"• {nombre} | Sabor: {sabor} | "
+            f"Precio: {precio:,.0f} pesos COP | Stock: {stock_txt} | ID: {id_prod}"
         )
     return "\n".join(lineas)
 
@@ -147,10 +167,35 @@ def crear_venta_api(items: list, metodo_pago: str) -> dict:
 # ─────────────────────────────────────────────
 
 def _enriquecer_historial(historial: list) -> list:
-    """Inyecta el catálogo actual en el mensaje de sistema."""
+    """
+    Inyecta el catálogo REAL en cada mensaje de sistema.
+    Si no hay catálogo, bloquea la respuesta con un error controlado.
+    """
     catalogo = cargar_catalogo_productos()
+
+    if not catalogo:
+        # Sin datos reales → no responder con datos inventados
+        regla = (
+            "\n\n⚠️ CATÁLOGO NO DISPONIBLE. "
+            "Di al cliente: 'Uy bro, en este momento no me carga el menú, dame un segundo.' "
+            "NO inventes precios ni productos."
+        )
+        enriquecido = []
+        for m in historial:
+            if m.get('role') == 'system':
+                enriquecido.append({'role': 'system', 'content': m['content'] + regla})
+            else:
+                enriquecido.append(m)
+        return enriquecido
+
     catalogo_txt = _construir_catalogo_texto(catalogo)
-    contexto = f"\n\n═══ CATÁLOGO ACTUAL ═══\n{catalogo_txt}\n═══════════════════════"
+    contexto = (
+        f"\n\n═══ CATÁLOGO ACTUAL (DATOS REALES DE LA BD) ═══\n"
+        f"{catalogo_txt}\n"
+        f"═══════════════════════════════════════════════\n"
+        f"REGLA CRÍTICA: USA SOLO ESTOS PRECIOS Y STOCKS. "
+        f"NUNCA inventes precios, nombres ni disponibilidad."
+    )
 
     enriquecido = []
     for m in historial:
