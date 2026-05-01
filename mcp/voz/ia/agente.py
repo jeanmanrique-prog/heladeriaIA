@@ -250,20 +250,39 @@ def _enriquecer_historial(historial: list) -> list:
 
     # Estado actual del pedido extraído del historial
     estado = _extraer_estado_pedido(historial, catalogo)
-    if estado["producto"] or estado["pago"]:
-        producto_txt = estado["producto"] or "(no elegido aún)"
-        precio_txt = f"{estado['precio']:,} pesos".replace(",", ".") if estado["precio"] else "(ver catálogo)"
-        pago_txt = estado["pago"] or "(no indicado aún)"
+    producto = estado["producto"]
+    precio   = estado["precio"]
+    pago     = estado["pago"]
+
+    if producto and pago:
+        # ─ CASO 3: Cliente ya dio producto Y pago → confirmar venta
+        precio_txt = f"{precio:,} pesos".replace(",", ".") if precio else "(ver catálogo)"
         bloque_estado = (
-            f"\n\n═══ ESTADO ACTUAL DEL PEDIDO ═══\n"
-            f"producto: {producto_txt}\n"
-            f"precio: {precio_txt}\n"
-            f"pago: {pago_txt}\n"
-            f"════════════════════════════════\n"
-            f"Si el usuario ya dio el pago → responde SOLO: 'Listo, ya te lo tengo 🎉'\n"
-            f"NO preguntes nada que ya esté en el estado anterior."
+            f"\n\n═══ ESTADO ACTUAL DEL PEDIDO (COMPLETO) ═══\n"
+            f"producto: {producto}\n"
+            f"precio:   {precio_txt}\n"
+            f"pago:     {pago}\n"
+            f"════════════════════════════════════════════\n"
+            f"✅ EL PEDIDO ESTÁ COMPLETO.\n"
+            f"RESPONDE SOLO: 'Listo, ya te lo tengo 🎉'\n"
+            f"NO hagas más preguntas."
+        )
+    elif producto and not pago:
+        # ─ CASO 2: Cliente eligió producto pero NO ha dicho cómo paga
+        precio_txt = f"{precio:,} pesos".replace(",", ".") if precio else "(ver catálogo)"
+        bloque_estado = (
+            f"\n\n═══ ESTADO ACTUAL DEL PEDIDO (PENDIENTE PAGO) ═══\n"
+            f"producto: {producto}\n"
+            f"precio:   {precio_txt}\n"
+            f"pago:     (AÚN NO INDICADO)\n"
+            f"═════════════════════════════════════════════════\n"
+            f"⚠️ SIGUIENTE PASO OBLIGATORIO:\n"
+            f"Confirma el producto y el precio, luego PREGUNTA el método de pago.\n"
+            f"Ejemplo: 'Listo, te dejo el de {producto} 🍦 Son {precio_txt}. ¿Pagas con efectivo o tarjeta?'\n"
+            f"❌ NO digas 'Listo ya te lo tengo' hasta que el cliente confirme el pago."
         )
     else:
+        # ─ CASO 1: Sin estado — primera interacción
         bloque_estado = ""
 
     # Combinar: reglas de estado + catálogo + estado actual
