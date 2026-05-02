@@ -33,18 +33,16 @@ def detectar_intencion(texto: str) -> str:
     return "conversacion"
 
 def es_intencion_catalogo(t: str) -> bool:
-    patrones = ("que hay", "que tienen", "que sabores", "que productos", "menu", "catalogo", "lista de productos", "disponible")
+    patrones = ("que hay", "que tienen", "que sabores", "que productos", "menu", "catalogo", "lista de productos", "disponible", "que venden", "que helados", "que hay de bueno")
     return any(p in t for p in patrones)
 
 def es_intencion_pago(t: str) -> bool:
-    if t in {"efectivo", "tarjeta"}:
+    if any(m in t for m in ("efectivo", "tarjeta", "nequi", "daviplata")):
         return True
-    if not re.search(r"\b(efectivo|tarjeta)\b", t):
-        return False
-    prefijos_pago = ("pago con ", "pago en ", "pagar con ", "pagar en ", "quiero pagar con ", "quiero pagar en ", "con ", "en ")
-    if any(t.startswith(prefijo) for prefijo in prefijos_pago):
+    prefijos_pago = ("pago con", "pago en", "pagar con", "pagar en", "quiero pagar", "voy con", "lo pago con", "con efectivo", "con tarjeta")
+    if any(p in t for p in prefijos_pago):
         return True
-    return bool(re.search(r"\b(pago|pagar|metodo|forma|cobrar)\b", t))
+    return bool(re.search(r"\b(pago|pagar|metodo|forma|cobrar|efectivo|tarjeta|nequi|daviplata)\b", t))
 
 def es_intencion_pedido(t: str) -> bool:
     # Versión simplificada para el módulo, se puede expandir con la lógica compleja de pipeline.py
@@ -80,7 +78,7 @@ def es_intencion_resumen(t: str) -> bool:
     return any(p in t for p in ("resumen", "reporte", "estado del negocio"))
 
 def es_intencion_recomendacion(t: str) -> bool:
-     patrones = ("recomienda", "recomiendas", "sugieres", "sugiere", "que me recomiendas", "que sabor es bueno", "cual es el mejor", "cual me llevo", "no se cual", "no me decido")
+     patrones = ("recomienda", "recomiendas", "sugieres", "sugiere", "que me recomiendas", "que sabor es bueno", "cual es el mejor", "cual me llevo", "no se cual", "no me decido", "que me aconsejas", "que me sugieres")
      return any(p in t for p in patrones)
  
 def es_intencion_agregar_stock(t: str) -> bool:

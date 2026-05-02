@@ -426,7 +426,7 @@ def get_ai_call_html(
 <script>
 const API_URL = "{api_url}";
 const SILENCE_MS = 700;
-const SPEECH_THR = 55;
+const SPEECH_THR = 40;
 const SILENCE_THR = 30;
 const MIN_SPEECH_MS = 300;
 const CHUNK_INTERVAL = 80;

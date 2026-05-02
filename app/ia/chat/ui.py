@@ -116,21 +116,26 @@ def render_chat_interface(api_ok: bool = True, theme: dict = None):
     
     st.markdown("""
         <style>
-        /* Estilo de la Tarjeta del Chat */
+        /* Fondo Integral (Blanco) */
+        [data-testid="stAppViewContainer"], [data-testid="stHeader"], .stApp, [data-testid="stMain"] {
+            background-color: #FFFFFF !important;
+        }
+
+        /* Estilo de la Tarjeta del Chat (Blanca con Sombra) */
         [data-testid="stVerticalBlockBorderWrapper"] {
             border: 1px solid #F0F0F0 !important;
             border-radius: 20px !important;
             padding: 10px 15px !important;
             background-color: #FFFFFF !important;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05) !important;
         }
 
-        /* Quitar el estilo de tarjeta al contenedor interno del scroll (height=400) para no duplicar cajas */
+        /* CONTENEDOR DE MENSAJES (Rosa muy claro) */
         [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stVerticalBlockBorderWrapper"] {
-            border: none !important;
-            box-shadow: none !important;
-            padding: 0 5px 0 0 !important;
-            background-color: transparent !important;
+            border: 1px solid #FFE6EB !important;
+            border-radius: 15px !important;
+            padding: 15px !important;
+            background-color: #FFF5F7 !important;
         }
 
         /* Forzar que el chat_input se quede abajo de la tarjeta */

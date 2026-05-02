@@ -48,10 +48,10 @@ from mcp.voz.pipeline.pipeline_voz import (  # noqa: E402
 
 MAX_TURNOS_VOZ = 16                # Máximos turnos en historial de voz
 VOICE_SESSION_TTL_SEC = 1800       # 30 min — sesiones sin actividad expiradas
-VOICE_REPLY_TIMEOUT_SEC = 25       # Timeout para LLM
-VOICE_STT_TIMEOUT_SEC = 6          # Timeout para STT (Whisper puede ser lento)
-VOICE_TTS_TIMEOUT_SEC = 8          # Timeout para TTS
-VOICE_SILENCE_CHUNKS_TO_REPLY = 3  # Chunks de silencio antes de forzar respuesta
+VOICE_REPLY_TIMEOUT_SEC = 35       # Aumentado para dar margen a Ollama
+VOICE_STT_TIMEOUT_SEC = 10         # Aumentado para Whisper lento
+VOICE_TTS_TIMEOUT_SEC = 10
+VOICE_SILENCE_CHUNKS_TO_REPLY = 3
 
 # Executors dedicados para no bloquear el event loop de FastAPI
 _EXECUTOR_LLM = ThreadPoolExecutor(max_workers=4, thread_name_prefix="llm")
@@ -138,21 +138,21 @@ def _transcribir(audio_bytes: bytes) -> tuple[bool, str]:
 # LLM — Generación de respuesta
 # ──────────────────────────────────────────────────────────
 
-def _generar_respuesta(sesion: dict) -> dict:
+def _generar_respuesta(sesion: dict, sid: str) -> dict:
     """Llama al LLM con el buffer acumulado y obtiene respuesta + audio TTS."""
     texto_usuario = str(sesion.get("buffer_usuario", "")).strip()
     if not texto_usuario:
         return {}
 
     historial = sesion.get("historial", _historial_base())
-    print(f"🧠 LLM procesando: '{texto_usuario[:80]}'")
+    print(f"🧠 Procesando mensaje para {sid[:8]}...: '{texto_usuario[:80]}'")
 
     historial.append({"role": "user", "content": texto_usuario})
     sesion["buffer_usuario"] = ""   # limpiar ANTES del LLM para no perder mensajes concurrentes
     sesion["silence_chunks"] = 0
 
     try:
-        fut = _EXECUTOR_LLM.submit(responder_vendedor_json, historial, False)
+        fut = _EXECUTOR_LLM.submit(responder_vendedor_json, historial, False, sid)
         respuesta_raw = fut.result(timeout=VOICE_REPLY_TIMEOUT_SEC)
     except FuturesTimeoutError:
         respuesta_raw = json.dumps(
@@ -275,8 +275,8 @@ def voz_stream(
 
     # ── 3. DECIDIR SI RESPONDER ──
     buffer_actual = str(sesion.get("buffer_usuario", "")).strip()
-    respuesta["transcript_live"] = buffer_actual
-
+    
+    # ── 4. GENERAR RESPUESTA LLM + TTS ──
     should_reply = bool(buffer_actual) and (
         force_reply
         or int(sesion.get("silence_chunks", 0)) >= VOICE_SILENCE_CHUNKS_TO_REPLY
@@ -285,8 +285,11 @@ def voz_stream(
     # ── 4. GENERAR RESPUESTA LLM + TTS ──
     if should_reply:
         print(f"🧠 Generando respuesta (force={force_reply})...")
-        update = _generar_respuesta(sesion)
+        # Capturamos el buffer antes de que se limpie en _generar_respuesta
+        buffer_para_transcripcion = buffer_actual 
+        update = _generar_respuesta(sesion, sid)
         respuesta.update(update)
-        respuesta["transcript_live"] = str(sesion.get("buffer_usuario", "")).strip()
+        # Aseguramos que la transcripción enviada al frontend sea la que procesamos
+        respuesta["transcript_live"] = buffer_para_transcripcion
 
     return respuesta
