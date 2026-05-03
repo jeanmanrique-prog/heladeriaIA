@@ -7,7 +7,7 @@ Catálogo Urbano (Versión Diseño Ligero/Mockup).
 import streamlit as st
 import base64
 from pathlib import Path
-from utils.peticiones import APIClient
+from utilidades.peticiones import ClienteAPI
 
 def render_comprar(pagina: str, api_ok: bool, theme: dict):
     """Renderiza el catálogo imitando el diseño limpio de la imagen de referencia."""
@@ -30,7 +30,7 @@ def render_comprar(pagina: str, api_ok: bool, theme: dict):
         st.markdown("<br>", unsafe_allow_html=True)
 
         # Obtener productos
-        res = APIClient.obtener_productos()
+        res = ClienteAPI.obtener_productos()
         if isinstance(res, dict): productos = res.get("productos", [])
         elif isinstance(res, list): productos = res
         else: productos = []
@@ -131,7 +131,7 @@ def _render_carrito_mockup(theme):
         items_api = [{"id_producto": i["id_producto"], "cantidad": i["cantidad"]} for i in st.session_state.carrito]
         payload = {"metodo_pago": metodo.lower(), "items": items_api}
         
-        ok, res = APIClient.crear_venta(payload)
+        ok, res = ClienteAPI.crear_venta(payload)
         if ok:
             st.session_state.carrito = []
             st.session_state.compra_exitosa = True

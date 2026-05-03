@@ -34,15 +34,17 @@ def normalizar_texto_usuario_voz(texto: str) -> str:
     t = texto.lower().strip()
     # Reemplazos fonéticos comunes
     reemplazos = [
-        (r"quieto|qiero|kiero|quisira|quisera|quera", "quiero"),
-        (r"elado|helao|elao|lado", "helado"),
+        (r"quieto|qiero|kiero|quisira|quisera|quera|ero|y ero|y era", "quiero"),
+        (r"elado|helao|elao|lado|celado|celados", "helado"),
         (r"efecto|perfecto|festivo|efectiva", "efectivo"),
         (r"targeta|tarjera|targueta", "tarjeta"),
         (r"comienda|remienda|recomiendo", "recomienda"),
         (r"choclate|choclati|colate|olate", "chocolate"),
         (r"presa|fresa", "fresa"),
         (r"vainilla|vainia|vainilla", "vainilla"),
-        (r"brownie|broni|brauni", "brownie")
+        (r"brownie|broni|brauni", "brownie"),
+        (r"limon|limn|imin|limones", "limón"),
+        (r"y me|dame|ver|manda", "mostrar")
     ]
     for p, r in reemplazos:
         t = re.sub(p, r, t)
@@ -73,42 +75,73 @@ def procesar_logica_ventas(msg_usuario: str, session_id: str) -> Optional[dict]:
     cmap = _obtener_catalogo_map()
     estado = GestorEstado.obtener_estado(session_id)
     t = normalizar_texto_usuario_voz(msg_usuario)
+    
+    # 1. DETECTAR PRODUCTO Y CANTIDAD
+    # Buscar números o palabras clave de "todo"
+    es_todo = any(word in t for word in ["todo", "todos", "lo que tenga", "lo que quede", "lo que queda", "completos"])
+    numeros = re.findall(r'\d+', t)
+    cantidad_detectada = int(numeros[0]) if numeros else None
 
-    # 1. DETECTAR PRODUCTO (Avanza a esperando_pago)
     for sabor, datos in cmap.items():
         if sabor in t and len(sabor) > 3:
+            # Si pidió "todo", la cantidad es el stock disponible
+            cantidad = datos["stock"] if es_todo else (cantidad_detectada or 1)
+
+            # VALIDACIÓN DE STOCK REAL PARA LA CANTIDAD PEDIDA
+            if datos["stock"] < cantidad or cantidad <= 0:
+                mensaje_agotado = f"Ay bro, me vas a matar pero de {sabor.capitalize()} solo me quedan {datos['stock']} unidades. ¿Te empaco esas o prefieres ver otro sabor?"
+                if datos["stock"] <= 0:
+                    mensaje_agotado = f"Ay bro, el de {sabor.capitalize()} se me acaba de agotar totalmente. ¿No te provoca otro o miramos el catálogo?"
+                
+                return {
+                    "accion": "informacion",
+                    "mensaje": mensaje_agotado
+                }
+            
             estado.update({
                 "producto": sabor,
-                "precio": datos["precio"],
-                "pago": None,
+                "cantidad": cantidad,
+                "precio_total": datos["precio"] * cantidad,
                 "paso": "esperando_pago"
             })
             GestorEstado.actualizar_estado(session_id, estado)
-            precio_fmt = f"{datos['precio']:,}".replace(",", ".")
+            
+            total_fmt = f"{datos['precio'] * cantidad:,}".replace(",", ".")
+            msj_vendedor = f"¡De una! Te empaco los {cantidad} de {sabor.capitalize()} que me quedan. 🍦" if es_todo else f"¡Listo! {cantidad} de {sabor.capitalize()} 🍦."
+            
             return {
                 "accion": "pedir_pago",
-                "mensaje": f"Listo, un helado de {sabor.capitalize()} 🍦. Son {precio_fmt} pesos. ¿Pagas con efectivo o tarjeta?",
-                "total": datos["precio"],
-                "items": [{"id_producto": datos["id"], "sabor": sabor, "cantidad": 1}]
+                "mensaje": f"{msj_vendedor} El total serían {total_fmt} pesos. ¿Pagas con efectivo o tarjeta?",
+                "total": datos["precio"] * cantidad,
+                "items": [{"id_producto": datos["id"], "sabor": sabor, "cantidad": cantidad}]
             }
 
-    # 2. DETECTAR PAGO (Avanza a completado y cierra venta)
+    # 2. DETECTAR PAGO
     if estado.get("paso") == "esperando_pago" and estado.get("producto"):
         pago_detectado = next((m for m in _METODOS_PAGO if m in t), None)
         if pago_detectado:
             producto_sabor = estado["producto"]
+            cantidad = estado.get("cantidad", 1)
             producto_id = cmap.get(producto_sabor, {}).get("id")
             
-            # EJECUTAR VENTA REAL EN BACKEND
+            # EJECUTAR VENTA REAL
+            venta_ok = False
             if producto_id:
-                crear_venta_api([{"id_producto": producto_id, "cantidad": 1}], pago_detectado)
+                res = crear_venta_api([{"id_producto": producto_id, "cantidad": cantidad}], pago_detectado)
+                venta_ok = "error" not in res
             
-            GestorEstado.limpiar_estado(session_id)
-            return {
-                "accion": "venta_exitosa",
-                "mensaje": "¡Listo bro, ya te lo tengo! 🎉 Disfruta tu helado.",
-                "detalle": {"producto": producto_sabor, "pago": pago_detectado}
-            }
+            if venta_ok:
+                GestorEstado.limpiar_estado(session_id)
+                return {
+                    "accion": "venta_exitosa",
+                    "mensaje": f"¡Listo bro! Ahí te mando los {cantidad} de {producto_sabor.capitalize()}. 🎉 ¡Disfrútalos!",
+                    "detalle": {"producto": producto_sabor, "cantidad": cantidad, "pago": pago_detectado}
+                }
+            else:
+                return {
+                    "accion": "informacion",
+                    "mensaje": "Uy bro, tuve un problemita técnico registrando la venta. ¿Intentamos de nuevo?"
+                }
 
     return None # Si no hay lógica de venta clara, usar LLM
 
@@ -138,6 +171,7 @@ def _enriquecer_historial(historial: list, session_id: str) -> list:
     
     extra = f"\n\nInstrucciones: Eres Urban, un vendedor de helados relajado de Medellín. " \
             f"No inventes precios. Si el usuario pregunta qué hay, dile que mire el catálogo. " \
+            f"IMPORTANTE: Responde SOLO con texto natural, NUNCA uses formato JSON ni llaves {{}} en tu respuesta. " \
             f"Mantén la charla corta.\n{estado_txt}"
     
     enriquecido = []
@@ -190,31 +224,56 @@ def responder_vendedor_json(historial: list, verbose: bool = False, session_id: 
     # 3. OTROS ATAJOS (Catálogo, Recomendación)
     intencion = detectar_intencion(msg_usuario)
     if intencion == "catalogo":
+        productos = obtener_catalogo_real()
+        sabores_disponibles = [p["sabor"] for p in productos if p.get("stock", 0) > 0]
+        lista_sabores = ", ".join(sabores_disponibles[:-1]) + " y " + sabores_disponibles[-1] if len(sabores_disponibles) > 1 else (sabores_disponibles[0] if sabores_disponibles else "nada por ahora")
+        
         return json.dumps({
             "accion": "mostrar_productos",
-            "mensaje": "Mirá lo que tengo hoy, todo melo:",
-            "productos": obtener_catalogo_real()
+            "mensaje": f"¡Claro bro! Mirá, hoy tengo helado de {lista_sabores}. Todo está bien melo. ¿Cuál te provoca?",
+            "productos": productos
         }, ensure_ascii=False)
 
     # 4. FALLBACK AL LLM (Charla general)
     texto_ia = responder(historial, session_id)
     return json.dumps({"accion": "informacion", "mensaje": texto_ia}, ensure_ascii=False)
 
+from .db_heladeria import registrar_venta as registrar_venta_directo
+
 def crear_venta_api(items: list, metodo_pago: str) -> dict:
-    """Llamada directa al backend con normalización de método de pago."""
+    """Llamada al backend con fallback directo a SQLite si la API falla."""
     _mapa = {"nequi": "efectivo", "daviplata": "efectivo", "efectivo": "efectivo", "tarjeta": "tarjeta"}
     pago_final = _mapa.get(metodo_pago.lower(), "efectivo")
+    
+    # 1. Intentar vía API
     try:
         payload = {"metodo_pago": pago_final, "items": items}
         r = requests.post(f"{API_URL}/vender", json=payload, timeout=5)
-        return r.json()
-    except:
-        return {"error": "Conexión fallida"}
+        if r.status_code in (200, 201):
+            return r.json()
+    except Exception as e:
+        print(f"[Agente] Error API Ventas: {e}. Intentando fallback directo...")
+
+    # 2. Fallback Directo a SQLite (Garantiza que la venta se registre)
+    try:
+        res_directo = registrar_venta_directo(items, pago_final)
+        if res_directo.get("ok"):
+            return res_directo
+        return {"error": res_directo.get("error", "Error en DB")}
+    except Exception as e:
+        print(f"[Agente] Error Crítico en Fallback de Ventas: {e}")
+        return {"error": "Conexión fallida total"}
 
 def texto_voz_respuesta_vendedor(texto_json: str) -> str:
-    """Limpia el JSON para la síntesis de voz."""
+    """Limpia el JSON para la síntesis de voz usando el formateador robusto de la app."""
     try:
-        data = json.loads(texto_json)
-        return data.get("mensaje", "")
-    except:
-        return texto_json
+        from app.utilidades.formateadores import obtener_texto_visible
+        return obtener_texto_visible(texto_json)
+    except Exception as e:
+        print(f"[Agente] Error importando formateador: {e}")
+        try:
+            import json
+            data = json.loads(texto_json)
+            return data.get("mensaje", texto_json)
+        except:
+            return texto_json

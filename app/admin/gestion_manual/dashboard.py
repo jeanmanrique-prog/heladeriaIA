@@ -8,7 +8,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from utils.peticiones import APIClient
+from utilidades.peticiones import ClienteAPI
 from estilos.tema import fig_layout
 
 def render_dashboard(api_ok: bool, theme: dict):
@@ -21,9 +21,9 @@ def render_dashboard(api_ok: bool, theme: dict):
         return
 
     # Cargar datos
-    inv_data = APIClient.obtener_inventario()
-    ventas_data = APIClient.obtener_ventas()
-    alertas_data = APIClient.obtener_alertas()
+    inv_data = ClienteAPI.obtener_inventario()
+    ventas_data = ClienteAPI.obtener_ventas()
+    alertas_data = ClienteAPI.obtener_alertas()
 
     # Métricas principales
     _render_metrics(inv_data, ventas_data)

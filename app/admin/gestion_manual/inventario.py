@@ -9,7 +9,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from utils.peticiones import APIClient
+from utilidades.peticiones import ClienteAPI
 
 
 def render_inventario(api_ok: bool, theme: dict):
@@ -81,7 +81,7 @@ def render_inventario(api_ok: bool, theme: dict):
 
 
 def _render_stock_grid(theme: dict):
-    inv_data = APIClient.obtener_inventario()
+    inv_data = ClienteAPI.obtener_inventario()
     if not inv_data:
         st.info("Cargando inventario...")
         return
@@ -136,7 +136,7 @@ def _render_producto_img_markup(sabor: str, theme: dict) -> str:
 
 def _render_entrada_stock():
     st.markdown("### ➕ Registrar Entrada")
-    prod_data = APIClient.obtener_productos()
+    prod_data = ClienteAPI.obtener_productos()
     if prod_data:
         prods = {p["nombre_producto"]: p["id_producto"] for p in prod_data["productos"]}
         sel = st.selectbox("Producto", list(prods.keys()))
@@ -144,7 +144,7 @@ def _render_entrada_stock():
         motivo = st.text_input("Motivo", value="Reposición de stock")
 
         if st.button("📥 Registrar"):
-            res = APIClient.entrada_inventario(
+            res = ClienteAPI.registrar_entrada_inventario(
                 {"id_producto": prods[sel], "cantidad": cant, "motivo": motivo}
             )
             if res:

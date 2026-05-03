@@ -7,7 +7,7 @@ Kardex y registro histórico de movimientos de inventario.
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from utils.peticiones import APIClient
+from utilidades.peticiones import ClienteAPI
 from estilos.tema import fig_layout
 
 def render_movimientos(api_ok: bool, theme: dict):
@@ -18,7 +18,7 @@ def render_movimientos(api_ok: bool, theme: dict):
         st.error("⚠️ Servidor API desconectado.")
         return
 
-    data = APIClient.obtener_movimientos()
+    data = ClienteAPI.obtener_movimientos()
     if not data or not data["movimientos"]:
         st.info("No hay movimientos registrados.")
         return

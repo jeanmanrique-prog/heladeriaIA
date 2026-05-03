@@ -1,9 +1,10 @@
 """
 app/ia/chat/
-───────────
-Módulo para el chat interactivo con la IA Urban.
+─────────────
+Módulo para la gestión del chat con IA.
 
 Contenido:
-  controller.py  — Lógica de negocio e integración con backend.
-  ui.py          — Componentes de interfaz Streamlit.
+  controller.py     — Lógica de envío y procesamiento de mensajes.
+  interfaz_chat.py  — Renderizado de la UI del chat (antes ui.py).
+  estilos_chat.py   — Estilos CSS específicos para el chat.
 """

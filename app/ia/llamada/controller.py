@@ -6,8 +6,8 @@ Controlador para la lógica de voz.
 
 import streamlit as st
 import time
-from utils.session_manager import SessionManager
-from utils.peticiones import APIClient
+from utilidades.gestor_sesion import GestorSesion
+from utilidades.peticiones import ClienteAPI
 
 class VozController:
     @staticmethod

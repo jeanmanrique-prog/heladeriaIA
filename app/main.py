@@ -29,37 +29,53 @@ except Exception:
 
 # Utilidades y Gestión de Estado (Rutas locales para Streamlit)
 
-from utils.session_manager import SessionManager
-from utils.peticiones import APIClient
-from utils.formatters import corregir_mojibake
+from utilidades.gestor_sesion import GestorSesion
+from utilidades.peticiones import ClienteAPI
+from utilidades.formateadores import corregir_codificacion
 
 # Estilos y Tema
 from estilos.tema import get_tema, aplicar_css_global
 
 # Componentes Globales
-from componentes.sidebar import render_sidebar
+from componentes.barra_lateral import render_sidebar
 
 # Páginas de Administrador
 from admin.gestion_manual.dashboard import render_dashboard
 from admin.gestion_manual.inventario import render_inventario
 from admin.gestion_manual.ventas import render_ventas
 from admin.gestion_manual.movimientos import render_movimientos
-from admin.ia import render_ia_admin
 
 # Páginas de Cliente
 from cliente.compra_manual.comprar import render_comprar
-from cliente.ia import render_ia_cliente
 
 # ──────────────────────────────────────────────────────────
 # CONFIGURACIÓN DE PÁGINA
 # ──────────────────────────────────────────────────────────
-
 st.set_page_config(
     page_title="Gelateria Urbana | Street Style",
     page_icon="🍦",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# ──────────────────────────────────────────────────────────
+# FUNCIONES DE DESPACHO DE IA (CENTRALIZADAS)
+# ──────────────────────────────────────────────────────────
+def render_ia_admin(pagina: str, api_ok: bool, theme: dict):
+    if pagina == "💬 Chat con IA":
+        from ia.chat.interfaz.interfaz_admin import render_pagina_chat_admin
+        render_pagina_chat_admin(api_ok, theme)
+    elif pagina == "📞 Llamada con IA":
+        from ia.llamada.interfaz.interfaz_admin import render_pagina_llamada_admin
+        render_pagina_llamada_admin(theme)
+
+def render_ia_cliente(pagina: str, api_ok: bool, theme: dict):
+    if pagina == "💬 Chat con IA":
+        from ia.chat.interfaz.interfaz_cliente import render_pagina_chat_cliente
+        render_pagina_chat_cliente(api_ok, theme)
+    elif pagina == "📞 Llamada con IA":
+        from ia.llamada.interfaz.interfaz_cliente import render_pagina_llamada_cliente
+        render_pagina_llamada_cliente(theme)
 
 def render_conocenos(theme):
     """Página especial 'Conócenos' con imagen inmersiva."""
@@ -86,7 +102,7 @@ def render_conocenos(theme):
 
 def main():
     # 1. Inicializar Estado Global
-    SessionManager.initialize()
+    GestorSesion.inicializar()
     
     # 2. Determinar Tema (Admin: Dark / Cliente: Light)
     is_admin = st.session_state.role == "admin"
@@ -97,11 +113,13 @@ def main():
     aplicar_css_global(theme)
     
     # 4. Verificar Conectividad API
-    api_ok = APIClient.check_api()
+    api_ok = ClienteAPI.verificar_api()
+
     
     # 5. Refrescar servicios IA si es necesario (Voz/ASR)
     if st.session_state.pagina_actual == "📞 Llamada con IA":
-        SessionManager.refresh_services(mode="call")
+        GestorSesion.refrescar_servicios(modo="call")
+
     
     # 6. Renderizar Barra Lateral
     render_sidebar(api_ok, theme)

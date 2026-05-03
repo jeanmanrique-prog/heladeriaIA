@@ -7,9 +7,9 @@ Visualización de ingresos, tendencias y detalles de ventas.
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from utils.peticiones import APIClient
+from utilidades.peticiones import ClienteAPI
 from estilos.tema import fig_layout
-from utils.formatters import formatear_precio
+from utilidades.formateadores import formatear_precio
 
 def render_ventas(api_ok: bool, theme: dict):
     """Renderiza la página de análisis de ventas."""
@@ -19,7 +19,7 @@ def render_ventas(api_ok: bool, theme: dict):
         st.error("⚠️ Servidor API desconectado.")
         return
 
-    data = APIClient.obtener_ventas()
+    data = ClienteAPI.obtener_ventas()
     if not data or not data["ventas"]:
         st.info("🍦 No hay ventas para mostrar hoy.")
         return

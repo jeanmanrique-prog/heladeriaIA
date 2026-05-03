@@ -1,364 +1,25 @@
+"""
+app/ia/llamada/interfaz/interfaz_llamada.py
+──────────────────────────────────────────
+Interfaz de usuario para la llamada en tiempo real. 
+Centraliza la generación de HTML, JS y la integración con Streamlit.
+"""
+
 import streamlit as st
+import streamlit.components.v1 as components
 import base64
 from pathlib import Path
+from utilidades.gestor_sesion import GestorSesion
+from ia.llamada.estilos.estilos_llamada import obtener_estilos_llamada
 
-def _is_dark_color(value: str) -> bool:
-    color = (value or "").strip().lower()
-    if color in {"", "#fff", "#ffffff", "white"}:
-        return False
-    return False
+def obtener_cuerpo_llamada(avatar_src):
+    """Retorna el cuerpo HTML para la interfaz de llamada."""
+    barras_izq = "".join(f'<div class="v-bar" id="vb_l_{i}"></div>' for i in range(10))
+    barras_der = "".join(f'<div class="v-bar" id="vb_r_{i}"></div>' for i in range(10))
+    
+    avatar_html = f"<img src='{avatar_src}'>" if avatar_src.startswith("data:") else "🍦"
 
-def get_ai_call_html(
-    api_url, 
-    saved_sid, 
-    is_fresh, 
-    avatar_src, 
-    urban_src, 
-    user_src="👤",
-    accent_color="#FF4B7D", 
-    bg_color="#F7F7F7", 
-    text_color="#222222",
-    card_bg="#ffffff",
-    border_color="#FF4B7D"
-):
-    html_content = f"""
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800;900&display=swap');
-
-  * {{ 
-    box-sizing: border-box; 
-    margin: 0; 
-    padding: 0; 
-    font-family: 'Outfit', sans-serif; 
-  }}
-
-  html, body {{
-    height: 100%;
-    width: 100%;
-    overflow: hidden;
-    background-color: {bg_color};
-    color: {text_color};
-  }}
-  
-  .app-layout {{
-    display: flex;
-    width: 100vw;
-    height: 100vh;
-    padding: 20px;
-    gap: 30px;
-    background-color: {bg_color};
-    justify-content: center;
-    align-items: center;
-    overflow: hidden;
-  }}
-  
-  /* ── Columna Izquierda: Conversación en Vivo ── */
-  .transcription-panel {{
-    width: 400px;
-    height: 620px;
-    display: flex;
-    flex-direction: column;
-    background: transparent;
-    overflow: hidden;
-  }}
-  
-  .panel-header {{
-    margin-bottom: 15px;
-  }}
-  
-  .panel-title-row {{
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 8px;
-  }}
-  
-  .panel-icon {{
-    color: #A855F7;
-    font-size: 1.4rem;
-  }}
-  
-  .panel-title {{
-    font-weight: 800;
-    font-size: 1.1rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #333;
-  }}
-  
-  .panel-subtitle {{
-    color: #666;
-    font-size: 0.85rem;
-  }}
-
-  .chat-wrapper {{
-    flex: 1;
-    background: #FFFFFF;
-    border-radius: 35px;
-    box-shadow: 0 25px 80px rgba(0,0,0,0.04);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    border: 1px solid rgba(0,0,0,0.05);
-    position: relative;
-    height: 100%;
-  }}
-
-  .hist {{
-    flex: 1;
-    overflow-y: auto;
-    padding: 25px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    scrollbar-width: thin;
-    scrollbar-color: {accent_color}22 transparent;
-  }}
-
-  .hist::-webkit-scrollbar {{ width: 6px; }}
-  .hist::-webkit-scrollbar-thumb {{ background: {accent_color}22; border-radius: 10px; }}
-
-  .empty-state {{
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    text-align: center;
-    padding: 30px;
-    color: #888;
-  }}
-  
-  .empty-icon {{
-    font-size: 3rem;
-    margin-bottom: 15px;
-    opacity: 0.5;
-    background: linear-gradient(135deg, #FF4B7D, #A855F7);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }}
-  
-  .empty-title {{
-    font-weight: 700;
-    font-size: 1.2rem;
-    color: #333;
-    margin-bottom: 8px;
-  }}
-  
-  .empty-text {{
-    font-size: 0.9rem;
-    max-width: 280px;
-    line-height: 1.4;
-  }}
-
-  .msg-row {{
-    display: flex;
-    gap: 12px;
-    max-width: 85%;
-    animation: slideIn 0.3s ease-out;
-  }}
-  
-  @keyframes slideIn {{
-    from {{ opacity: 0; transform: translateY(10px); }}
-    to {{ opacity: 1; transform: translateY(0); }}
-  }}
-
-  .msg-avatar {{
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    overflow: hidden;
-    flex-shrink: 0;
-  }}
-  .msg-avatar img {{ width: 100%; height: 100%; object-fit: cover; }}
-
-  .msg-content {{
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }}
-
-  .msg-meta {{
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }}
-
-  .msg-name {{
-    font-weight: 800;
-    font-size: 0.85rem;
-  }}
-
-  .msg-time {{
-    font-size: 0.7rem;
-    color: #999;
-  }}
-
-  .msg-bubble {{
-    padding: 12px 16px;
-    border-radius: 18px;
-    font-size: 0.9rem;
-    line-height: 1.4;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.02);
-  }}
-
-  .msg-row.ia .msg-bubble {{ background: #FFE4EC; color: #222; border-top-left-radius: 4px; }}
-  .msg-row.usr .msg-bubble {{ background: #F1F1F1; color: #222; border-top-right-radius: 4px; }}
-  .msg-row.ia .msg-name {{ color: {accent_color}; }}
-
-  .chat-footer {{
-    padding: 15px;
-    background: #FAFAFA;
-    border-top: 1px solid #EEE;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    color: #999;
-    font-size: 0.8rem;
-    font-weight: 600;
-  }}
-
-  .live-indicator {{
-    margin: 10px 25px;
-    padding: 10px 15px;
-    background: #FFF;
-    border-radius: 10px;
-    font-style: italic;
-    color: #888;
-    font-size: 0.8rem;
-    border-left: 4px solid {accent_color};
-    display: flex;
-    align-items: center;
-  }}
-
-  /* ── Columna Derecha: Panel de Llamada ── */
-  .call-panel {{
-    width: 400px;
-    height: 620px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-  }}
-  
-  .call-card {{
-    width: 100%;
-    height: 100%;
-    background: #FFFFFF;
-    border-radius: 35px;
-    padding: 35px 30px;
-    text-align: center;
-    box-shadow: 0 25px 80px rgba(255, 75, 125, 0.1);
-    border: 1px solid rgba(255, 75, 125, 0.15);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-  }}
-
-  .call-badge {{
-    background: {accent_color};
-    color: white;
-    padding: 6px 20px;
-    border-radius: 50px;
-    font-weight: 900;
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    margin-bottom: 25px;
-  }}
-
-  .call-title {{
-    font-weight: 900;
-    font-size: 1.6rem;
-    color: #222;
-    margin-bottom: 5px;
-  }}
-
-  .call-subtitle {{
-    color: {accent_color};
-    font-weight: 700;
-    font-size: 0.85rem;
-    margin-bottom: 30px;
-    opacity: 0.8;
-  }}
-
-  .viz-row {{
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 15px;
-    width: 100%;
-    margin-bottom: 25px;
-  }}
-  .viz-bars {{ display: flex; gap: 5px; align-items: center; height: 40px; }}
-  .v-bar {{ width: 4px; height: 4px; background: {accent_color}55; border-radius: 2px; transition: height 0.1s; }}
-
-  .main-avatar-wrap {{
-    width: 150px;
-    height: 150px;
-    border-radius: 50%;
-    border: 6px solid #FFE4EC;
-    padding: 10px;
-    position: relative;
-  }}
-  
-  .main-avatar {{
-    width: 100%; height: 100%; border-radius: 50%;
-    background: white; overflow: hidden; display: flex;
-    align-items: center; justify-content: center;
-    border: 1px solid #EEE;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
-  }}
-  .main-avatar img {{ width: 100%; height: 100%; object-fit: contain; }}
-  .main-avatar.speaking {{ animation: pulseAvatar 1.5s infinite; }}
-  
-  @keyframes pulseAvatar {{
-    0% {{ box-shadow: 0 0 0 0px rgba(255, 75, 125, 0.3); }}
-    100% {{ box-shadow: 0 0 0 30px rgba(255, 75, 125, 0); }}
-  }}
-
-  .timer {{
-    font-size: 2.3rem;
-    font-weight: 900;
-    color: #222;
-    margin: 25px 0 10px 0;
-    letter-spacing: 2px;
-    font-family: 'Courier New', Courier, monospace;
-  }}
-
-  .status-row {{
-    display: flex; align-items: center; gap: 8px;
-    color: #888; font-weight: 600; font-size: 0.9rem; margin-bottom: 35px;
-  }}
-  .status-dot {{ width: 10px; height: 10px; border-radius: 50%; background: #DDD; }}
-  .status-dot.active {{ background: {accent_color}; box-shadow: 0 0 10px {accent_color}AA; }}
-
-  .controls-row {{ display: flex; align-items: center; justify-content: center; gap: 30px; }}
-  .btn-sec {{
-    width: 55px; height: 55px; border-radius: 50%; background: #F3F3F3; border: none;
-    cursor: pointer; display: flex; align-items: center; justify-content: center;
-    font-size: 1.2rem; color: {accent_color}; transition: all 0.2s;
-  }}
-  .btn-sec:hover {{ background: #FFE4EC; transform: translateY(-3px); }}
-  .btn-main {{
-    width: 80px; height: 80px; border-radius: 50%; background: {accent_color}; border: none;
-    cursor: pointer; display: flex; align-items: center; justify-content: center;
-    font-size: 2.1rem; color: white; box-shadow: 0 15px 40px rgba(255, 75, 125, 0.35);
-  }}
-  .btn-main:hover {{ transform: scale(1.05) translateY(-4px); }}
-  
-  .btn-label {{ font-size: 0.75rem; font-weight: 800; color: #888; text-transform: uppercase; margin-top: 10px; }}
-  .control-group {{ display: flex; flex-direction: column; align-items: center; }}
-  .error-box {{ margin-top: 20px; padding: 12px; background: #FFF0F0; color: #D32F2F; border-radius: 12px; font-size: 0.85rem; display: none; }}
-</style>
-</head>
-<body>
+    return f"""
 <div class="app-layout">
   <div class="transcription-panel">
     <div class="panel-header">
@@ -387,15 +48,15 @@ def get_ai_call_html(
       <p class="call-subtitle">Gelatería Urbana Colombia</p>
       <div class="viz-row">
         <div class="viz-bars" id="viz_L">
-          {"".join(f'<div class="v-bar" id="vb_l_{i}"></div>' for i in range(10))}
+          {barras_izq}
         </div>
         <div class="main-avatar-wrap">
           <div class="main-avatar" id="avCircle">
-             {"<img src='" + avatar_src + "'>" if avatar_src.startswith("data:") else "🍦"}
+             {avatar_html}
           </div>
         </div>
         <div class="viz-bars" id="viz_R">
-          {"".join(f'<div class="v-bar" id="vb_r_{i}"></div>' for i in range(10))}
+          {barras_der}
         </div>
       </div>
       <div class="timer" id="callTimer">00:00</div>
@@ -422,16 +83,20 @@ def get_ai_call_html(
     </div>
   </div>
 </div>
+"""
 
+def obtener_script_llamada(url_api, sid_guardado, es_nuevo, avatar_src, user_src):
+    """Retorna el bloque de JavaScript para la lógica de la llamada."""
+    return f"""
 <script>
-const API_URL = "{api_url}";
+const API_URL = "{url_api}";
 const SILENCE_MS = 700;
 const SPEECH_THR = 40;
 const SILENCE_THR = 30;
 const MIN_SPEECH_MS = 300;
 const CHUNK_INTERVAL = 80;
 
-let sessionId = "{saved_sid}";
+let sessionId = "{sid_guardado}";
 let stream = null;
 let audioCtx = null;
 let analyser = null;
@@ -445,7 +110,7 @@ let silenceTimer = null;
 let speechStartTs = 0;
 let currentSrc = null;
 let vadTimer = null;
-let freshStart = {"true" if is_fresh else "false"};
+let freshStart = {"true" if es_nuevo else "false"};
 let callTimerInterval = null;
 let callSeconds = 0;
 
@@ -650,14 +315,31 @@ async function startCall() {{
     const fd = new FormData();
     fd.append('reset', 'true');
     fd.append('session_id', sessionId || '');
-    const resp = await fetch(API_URL + '/voz-stream', {{ method:'POST', body:fd }});
-    const data = await resp.json();
-    sessionId = data.session_id || '';
-    if (data.assistant_text) addMsg('ia', data.assistant_text);
-    if (data.assistant_audio_b64) await playB64Audio(data.assistant_audio_b64);
-    startVADLoop();
-    if (!isAiSpeaking) setStatus('Conectado', true);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+    try {{
+      const resp = await fetch(API_URL + '/voz-stream', {{ 
+        method:'POST', 
+        body:fd,
+        signal: controller.signal
+      }});
+      clearTimeout(timeoutId);
+      const data = await resp.json();
+      sessionId = data.session_id || '';
+      if (data.assistant_text) addMsg('ia', data.assistant_text);
+      if (data.assistant_audio_b64) await playB64Audio(data.assistant_audio_b64);
+      startVADLoop();
+      if (!isAiSpeaking) setStatus('Conectado', true);
+    }} catch(fe) {{
+      clearTimeout(timeoutId);
+      console.error('Error de conexión:', fe);
+      setStatus('Error de conexión. Reintenta.', false);
+      setTimeout(endCall, 2000);
+    }}
   }} catch(e) {{
+    console.error('Error de micrófono:', e);
     errEl.style.display = 'block';
     errEl.textContent = 'Permite el micrófono para hablar.';
     endCall();
@@ -666,8 +348,11 @@ async function startCall() {{
 
 function endCall() {{
   isRunning = false;
+  sessionId = '';
   clearInterval(vadTimer);
   clearInterval(callTimerInterval);
+  callSeconds = 0;
+  document.getElementById('callTimer').textContent = '00:00';
   stopCurrentAudio();
   if (stream) stream.getTracks().forEach(t => t.stop());
   setStatus('Desconectado', false);
@@ -690,7 +375,102 @@ function endCall() {{
   }}
 }}
 </script>
+"""
+
+def generar_interfaz_llamada(
+    url_api, 
+    sid_guardado, 
+    es_nuevo, 
+    avatar_src, 
+    urban_src, 
+    user_src="👤",
+    color_acento="#FF4B7D", 
+    color_fondo="#F7F7F7", 
+    color_texto="#222222",
+    color_tarjeta="#ffffff",
+    color_borde="#FF4B7D"
+):
+    """Genera el HTML completo para la interfaz de llamada inmersiva."""
+    css = obtener_estilos_llamada(color_acento, color_fondo, color_texto, color_tarjeta)
+    cuerpo = obtener_cuerpo_llamada(avatar_src)
+    js = obtener_script_llamada(url_api, sid_guardado, es_nuevo, avatar_src, user_src)
+    
+    return f"""
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    {css}
+</head>
+<body>
+    {cuerpo}
+    {js}
 </body>
 </html>
 """
-    return html_content
+
+def render_realtime_call(theme: dict):
+    """Renderiza la interfaz de llamada con soporte completo de colores del tema."""
+    GestorSesion.inicializar_modo("call")
+    
+    # Colores del tema
+    accent = theme.get("ACCENT", "#ff1493")
+    bg = theme.get("BG", "#ffffff")
+    text = theme.get("TEXT", "#1a1a1a")
+    card = theme.get("BG2", "#ffffff")
+    border = theme.get("ACCENT", "#ff1493")
+
+    # Cargar recursos visuales
+    root_dir = Path(__file__).resolve().parent.parent.parent.parent.parent
+    images_dir = root_dir / "imagenes"
+    
+    def get_b64(path):
+        if path.exists():
+            with open(path, "rb") as f:
+                return f"data:image/png;base64,{base64.b64encode(f.read()).decode()}"
+        return None
+
+    avatar_src = get_b64(images_dir / "perfil_ia.png") or "🍦"
+    urban_name = "urban_admin.png" if st.session_state.role == "admin" else "urban_comiendo.png"
+    urban_src = get_b64(images_dir / urban_name) or get_b64(images_dir / "urban_comiendo.png") or ""
+    user_src = get_b64(images_dir / "perfil_cliente.png") or "👤"
+
+    saved_sid = st.session_state.get("_voz_session_id") or ""
+    is_fresh = not st.session_state.get("call_greeted", False)
+    
+    if is_fresh:
+        st.session_state["call_greeted"] = True
+        st.session_state["_voz_session_id"] = ""
+        saved_sid = ""
+
+    # Inyectar CSS global de la página
+    st.markdown("""
+        <style>
+            .main .block-container {
+                max-width: 100vw !important;
+                padding-left: 2rem !important;
+                padding-right: 2rem !important;
+                padding-top: 1rem !important;
+            }
+            iframe {
+                border-radius: 25px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.05);
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
+    html_code = generar_interfaz_llamada(
+        url_api="http://127.0.0.1:8000",
+        sid_guardado=saved_sid,
+        es_nuevo=is_fresh,
+        avatar_src=avatar_src,
+        urban_src=urban_src,
+        user_src=user_src,
+        color_acento="#FF4B7D",
+        color_fondo="#F7F7F7",
+        color_texto="#222222",
+        color_tarjeta="#FFFFFF",
+        color_borde="#FF4B7D"
+    )
+    
+    components.html(html_code, height=750, scrolling=False)
