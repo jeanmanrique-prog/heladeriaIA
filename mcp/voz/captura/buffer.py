@@ -1,3 +1,16 @@
+"""
+📦 BUFFER — EL ALMACÉN DE VOZ
+------------------------------
+Este archivo se encarga de ir "pegando" cada trozo de audio que llega mientras 
+el usuario habla, para luego entregarlo como un solo archivo WAV completo.
+
+FLUJO DESDE LA PERSPECTIVA DEL BUFFER:
+1. RECIBIR: El 'pipeline_voz.py' le entrega trozos (chunks) de audio crudo.
+2. ACUMULAR: Los guarda en memoria (BytesIO) y cuenta cuántos frames lleva.
+3. EMPACAR: Cuando el usuario termina de hablar, el buffer le pone la cabecera 
+   WAV para que sea entendible por 'stt.py'.
+4. LIMPIAR: Una vez entregado al 'pipeline_voz.py', se vacía para la siguiente frase.
+"""
 import io
 import wave
 

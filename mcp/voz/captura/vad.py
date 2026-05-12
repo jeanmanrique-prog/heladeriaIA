@@ -1,3 +1,15 @@
+"""
+🔍 VAD — EL DETECTOR DE VOZ
+---------------------------
+VAD (Voice Activity Detection) es el filtro de inteligencia del sistema. 
+Decide qué es voz humana y qué es simplemente silencio o ruido de fondo.
+
+FLUJO DESDE LA PERSPECTIVA DEL VAD:
+1. ANALIZAR: Recibe un trozo de audio desde 'pipeline_voz.py'.
+2. FILTRAR: Compara esa energía con un umbral para ignorar el ruido.
+3. SUAVIZAR: Usa un pequeño buffer para no cortar frases.
+4. DECIDIR: Devuelve un SÍ o NO a 'pipeline_voz.py' para activar o no la grabación.
+"""
 import numpy as np
 import collections
 

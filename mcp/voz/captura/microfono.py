@@ -1,3 +1,15 @@
+"""
+🎙️ MICROFONO — EL CAPTURADOR DE SONIDO
+---------------------------------------
+Este archivo es la conexión física con tu hardware. Su única misión es escuchar 
+y convertir las ondas de sonido en datos digitales (bytes) para el sistema.
+
+FLUJO DESDE LA PERSPECTIVA DEL MICRÓFONO:
+1. INICIAR: Abre el flujo de entrada usando la librería 'sounddevice'.
+2. CAPTURAR: Divide el sonido en bloques pequeños.
+3. ENVIAR: Entrega cada bloque inmediatamente a 'pipeline_voz.py'.
+4. DETENER: Cierra el acceso al micrófono cuando 'pipeline_voz.py' termina.
+"""
 try:
     import sounddevice as sd
 except ImportError:
