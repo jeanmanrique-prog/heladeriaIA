@@ -53,7 +53,7 @@ def inicializar_transcriptor() -> bool:
 def transcribir_audio(
     audio_bytes: bytes,
     language: str = "es",
-    beam_size: int = 5,
+    beam_size: int = 5,  # Aumentado a 5 para evaluar más opciones de palabras y ganar precisión.
 ) -> tuple[bool, str]:
     """Transcribe audio usando Faster-Whisper con parámetros optimizados."""
     global _transcriptor
@@ -73,6 +73,7 @@ def transcribir_audio(
             tmp.name,
             language=language,
             beam_size=beam_size,
+            # 'initial_prompt' le da pistas a la IA sobre el vocabulario del negocio para evitar confusiones fonéticas.
             initial_prompt="Helado, heladería, Urban, chocolate, fresa, vainilla, ron pasas, macadamia, efectivo, tarjeta, datáfono, pedir, comprar, menú, catálogo, nequi, daviplata.",
             vad_filter=True, # Usar VAD interno de Whisper también
             vad_parameters=dict(min_silence_duration_ms=500),

@@ -24,7 +24,7 @@ API_URL = "http://127.0.0.1:8000"
 MODELO = "llama3.2:1b"
 VOZ_MODELO = str(MCP_DIR / "voz_es.onnx")
 VOZ_CONFIG = str(MCP_DIR / "voz_es.onnx.json")
-ASR_MODELO = "base"
+ASR_MODELO = "base"  # Usamos 'base' en lugar de 'tiny' para entender mejor el habla humana natural.
 MENSAJE_BIENVENIDA = "Ey parcero bienvenido a Gelateria Urban los mejores helados de Colombia, que se te antoja hoy?"
 MENSAJE_BIENVENIDA_CLIENTE = (
     '{"accion":"saludo","mensaje":"Ey parcero bienvenido a Gelateria Urban los mejores helados de Colombia, que se te antoja hoy?"}'
@@ -35,7 +35,7 @@ SAMPLE_RATE = 16000
 BLOCK_SIZE = 1024
 CHANNELS = 1
 DTYPE = "int16"
-SILENCE_THRESHOLD = 700
+SILENCE_THRESHOLD = 700  # Aumentado de 500 a 700 para dar más tiempo a personas que hablan despacio.
 MIN_AUDIO_LEN_FOR_STT = 8000 # aprox 0.5s
 
 # Prompts exportados para conveniencia
