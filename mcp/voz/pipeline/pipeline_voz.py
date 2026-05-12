@@ -1,8 +1,19 @@
 """
-Orquestador Principal de Voz — Heladería Urban
-----------------------------------------------
-Este módulo coordina la captura, procesamiento, transcripción,
-intención y respuesta del sistema de voz.
+🎼 ORQUESTADOR PRINCIPAL — EL DIRECTOR DE ORQUESTA
+-------------------------------------------------
+Este archivo es el cerebro que coordina a todos los demás. Se asegura de que 
+el audio fluya correctamente desde que hablas hasta que la IA te responde.
+
+FLUJO DETALLADO POR ARCHIVO:
+1. CAPTURA: Inicia el 'microfono.py' para abrir el hardware de audio.
+2. FILTRADO: Usa 'vad.py' para decidir si el ruido recibido es realmente voz.
+3. MEMORIA: Si es voz, se guarda cada trozo en 'buffer.py'.
+4. TRADUCCIÓN: Al haber silencio, envía el audio de 'buffer.py' a 'stt.py' (Whisper) para pasarlo a texto.
+5. PENSAMIENTO (IA): Envía el texto a 'agente.py'. Este es el cerebro que decide qué decir.
+6. CONTEXTO: El 'agente.py' consulta los 'RESOURCES' (contexto rápido) y las 'TOOLS' (acciones), 
+   los cuales obtienen la "verdad" desde 'db_heladeria.py'.
+7. COORDINACIÓN: Usa 'turnos.py' para saber cuándo callar a la IA si el usuario interrumpe.
+8. VOZ: La respuesta de la IA se envía a 'tts.py' para convertirla en audio.
 """
 
 import os
