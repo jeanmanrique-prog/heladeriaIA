@@ -251,8 +251,10 @@ Antes de arrancar por primera vez, asegúrate de preparar el entorno:
 ### B. Siguientes veces (Uso diario)
 Para el día a día, solo necesitas un comando:
 
-1. Asegúrate de que Ollama esté activo (`ollama serve`).
-2. Inicia todo el sistema Urban:
+1. **Asegúrate de que Ollama esté activo:** 
+   - En Raspberry Pi, suele iniciar solo. Puedes verificarlo escribiendo: `ollama list`. Si ves tus modelos, está activo.
+   - Si no responde, ejecútalo en una terminal aparte con: `ollama serve`.
+2. **Inicia todo el sistema Urban:**
    ```bash
    ./iniciar.sh
    ```
