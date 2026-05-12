@@ -28,6 +28,8 @@ REGLAS_CORRECCION = {
     "anador": "añadir",
     "colate": "chocolate",
     "chocolat": "chocolate",
+    "chochocolate": "chocolate",
+    "cho": "",
     "urvan": "urban",
 }
 
