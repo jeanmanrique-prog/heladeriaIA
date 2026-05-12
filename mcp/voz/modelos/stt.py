@@ -14,6 +14,15 @@ FLUJO DESDE LA PERSPECTIVA DEL STT:
 3. TRANSCRIBIR: Convierte el audio en texto palabra por palabra.
 4. NORMALIZAR: Se envía el texto a 'normalizacion.py' para limpiar errores.
 5. ENTREGAR: Devuelve la frase limpia a 'pipeline_voz.py' para enviarla al 'agente.py'.
+
+¿POR QUÉ USAMOS EL MODELO BASE EN VEZ DEL TINY?
+Es normal que haya errores de reconocimiento. Los robots tienen una pronunciación "perfecta" que el modelo de IA tiny (el más pequeño y rápido) entiende fácil. Los humanos, en cambio, arrastramos palabras, hablamos más lento o tenemos acentos que el modelo pequeño no alcanza a procesar bien.
+
+He diseñado un Plan de Mejora de Precisión de Voz para que Urban sea mucho más inteligente al escucharte.
+Los 3 pilares del plan son:
+1. Subir de nivel el modelo: Cambiar el motor de tiny a base. Es un poco más pesado, pero mucho más capaz de entender a una persona real.
+2. Darle pistas (Contexto): Vamos a inyectar un "prompt inicial" en Whisper con palabras como helado, chocolate, fresa, efectivo. Así, cuando escuche algo parecido a "colate", la IA sabrá que lo más probable es que hayas dicho "chocolate".
+3. Búsqueda profunda: Aumentaremos el esfuerzo que hace la IA por evaluar diferentes opciones de palabras antes de decidirse por una, lo que ayuda mucho con las personas que hablan despacio.
 """
 import os
 import tempfile
@@ -44,7 +53,7 @@ def inicializar_transcriptor() -> bool:
 def transcribir_audio(
     audio_bytes: bytes,
     language: str = "es",
-    beam_size: int = 1,
+    beam_size: int = 5,
 ) -> tuple[bool, str]:
     """Transcribe audio usando Faster-Whisper con parámetros optimizados."""
     global _transcriptor
@@ -64,6 +73,7 @@ def transcribir_audio(
             tmp.name,
             language=language,
             beam_size=beam_size,
+            initial_prompt="Helado, heladería, Urban, chocolate, fresa, vainilla, ron pasas, macadamia, efectivo, tarjeta, datáfono, pedir, comprar, menú, catálogo, nequi, daviplata.",
             vad_filter=True, # Usar VAD interno de Whisper también
             vad_parameters=dict(min_silence_duration_ms=500),
             condition_on_previous_text=False,

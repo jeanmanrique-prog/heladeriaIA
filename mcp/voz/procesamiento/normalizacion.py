@@ -17,12 +17,18 @@ from rapidfuzz import fuzz
 
 REGLAS_CORRECCION = {
     "efecto": "efectivo",
+    "efecti": "efectivo",
     "presa": "fresa",
+    "fesa": "fresa",
     "tarjetaa": "tarjeta",
+    "tarjera": "tarjeta",
     "elado": "helado",
     "helao": "helado",
     "aunidades": "unidades",
     "anador": "añadir",
+    "colate": "chocolate",
+    "chocolat": "chocolate",
+    "urvan": "urban",
 }
 
 def normalizar_texto_base(texto: str) -> str:
