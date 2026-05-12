@@ -1,5 +1,5 @@
 """
-app/componentes/sidebar.py
+app/componentes/barra_lateral.py
 Componente lateral de navegación (Soporte Admin/Cliente con Estilo Centrado Rosa).
 """
 
