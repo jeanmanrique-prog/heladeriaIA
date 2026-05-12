@@ -1,14 +1,29 @@
 """
-mcp/voz/ia/db_heladeria.py
-──────────────────────────
-Módulo centralizado de acceso directo a la BD SQLite para el agente de IA.
-Usa exactamente la estructura definida en db/database.py:
-  - sabores (id_sabor, nombre, descripcion, activo)
-  - productos (id_producto, id_sabor, nombre_producto, volumen_litros, precio_unitario, activo)
-  - inventario (id_inventario, id_producto, cantidad_unidades, stock_minimo, ultima_actualizacion)
-  - ventas (id_venta, fecha, total, metodo_pago)
-  - detalle_venta (id_detalle, id_venta, id_producto, cantidad, precio_unitario, subtotal)
-  - movimientos_inventario (id_movimiento, id_producto, tipo, cantidad, fecha, motivo)
+🗄️ DB HELADERIA — EL LIBRO DE REGISTROS REALES
+-----------------------------------------------
+Este archivo es el puente directo entre el mundo de las ideas (la IA) y el 
+mundo real (el dinero y el helado físico).
+
+¿QUÉ PASARÍA SIN ESTE ARCHIVO?
+1. LA IA SERÍA CIEGA: No sabría qué sabores hay ni cuánto cuestan. Tendría que inventarlos.
+2. NO HABRÍA VENTAS: La IA podría prometerte un helado, pero nunca se guardaría el registro.
+3. CAOS DE INVENTARIO: Venderíamos helados que ya no existen porque no habría forma de restar stock.
+
+¿POR QUÉ ES NECESARIO?
+Garantiza que Urban (la IA) tenga datos 100% reales incluso si el SERVIDOR PRINCIPAL falla.
+Un servidor puede caer por:
+- Problemas de red o conexión a internet.
+- Mantenimiento del backend (FastAPI).
+- Sobrecarga de peticiones.
+
+¿POR QUÉ SIGUE FUNCIONANDO AQUÍ?
+Este archivo no depende de internet ni del servidor principal. Consulta la base de datos 
+de forma LOCAL y DIRECTA usando la librería 'sqlite3'. Es como tener una copia física 
+del libro de contabilidad guardada bajo llave: siempre está ahí aunque no haya luz.
+
+¿CÓMO CONSULTA LA BD?
+Usa rutas absolutas para localizar el archivo 'heladeria.db' en tu disco duro y 
+ejecuta sentencias SQL puras (SELECT, INSERT) para obtener la verdad absoluta del negocio.
 """
 
 import sqlite3

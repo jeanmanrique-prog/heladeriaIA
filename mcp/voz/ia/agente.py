@@ -1,3 +1,43 @@
+"""
+🤖 AGENTE — EL CEREBRO DE LA OPERACIÓN
+--------------------------------------
+Este es el archivo más importante de la lógica de negocio. Es el "director de orquesta"
+que decide cómo usar cada pieza del sistema para dar una respuesta perfecta.
+
+¿CÓMO ORQUESTA LOS COMPONENTES?
+1. USA LOS PROMPTS: Para darle la personalidad a "Urban" (el tono callejero y amable) 
+   y para imponer las reglas de seguridad (ej. "no inventar precios").
+2. USA LOS RESOURCES: Lee el 'CatalogResource' para tener los precios reales 
+   frente a sus ojos sin tener que pedirlos cada vez.
+3. USA LAS TOOLS: Si el usuario confirma una compra, el Agente activa la Tool 
+   'registrar_venta' para escribir en la base de datos y restar el stock.
+4. USA LA INTENCIÓN: Clasifica lo que el usuario dijo para saber si debe 
+   activar una lógica matemática (vender) o una lógica de charla (IA).
+
+FLUJO TÍPICO DE UNA RESPUESTA:
+1. ENTRADA: Recibe el texto del usuario ("Quiero 2 de chocolate").
+2. ANÁLISIS: 'intencion.py' le dice: "Esto es un PEDIDO".
+3. CONSULTA: El Agente mira el 'CatalogResource' y confirma que HAY stock de chocolate.
+4. DECISIÓN: Como es un pedido, usa lógica determinística (Precio x Cantidad) 
+   en lugar de dejar que la IA adivine.
+5. RESPUESTA: Genera un JSON con la acción 'pedir_pago' y el mensaje de Urban.
+6. SALIDA: El 'pipeline_voz.py' recibe el JSON y lo envía a 'tts.py'.
+
+FLUJO DESDE LA PERSPECTIVA DEL AGENTE:
+Historial -> 'CatalogResource' / 'ContextoResource' -> 'intencion.py' -> 'db_heladeria.py' -> JSON.
+
+INTEGRACIÓN CON EL PIPELINE DE VOZ:
+El 'pipeline_voz.py' es el encargado de la "percepción" (escuchar y hablar), mientras 
+que este archivo ('agente.py') es el encargado de la "decisión" (pensar y actuar).
+
+EJEMPLO DE FLUJO (Cliente dice: "Dame uno de chocolate"):
+1. ESCUCHA ('pipeline_voz.py'): El micrófono captura el audio y 'stt.py' lo traduce.
+2. LLAMADA ('pipeline_voz.py' -> 'agente.py'): El pipeline invoca a 'responder_vendedor_json'.
+3. PENSAMIENTO ('agente.py'): Consulta 'CatalogResource', valida en 'db_heladeria.py' 
+   y decide la respuesta.
+4. RESPUESTA ('agente.py' -> 'pipeline_voz.py'): Devuelve un JSON con el mensaje.
+5. HABLA ('pipeline_voz.py'): Recibe el JSON, extrae el texto y llama a 'tts.py'.
+"""
 import json
 import re
 import requests
@@ -14,6 +54,8 @@ from mcp.prompts.prompt_sugerencias import PROMPT_SUGERENCIAS
 
 from ..procesamiento.normalizacion import normalizar_texto_base
 from mcp.tools.catalog_tools import obtener_catalogo_real
+from mcp.resources.catalog_resource import CatalogResource
+from mcp.resources.contexto_resource import ContextoResource
 from api.ia.estado import GestorEstado
 from .intencion import detectar_intencion
 
@@ -165,14 +207,19 @@ def verificar_ollama() -> tuple[bool, str]:
 # ──────────────────────────────────────────────────────────
 
 def _enriquecer_historial(historial: list, session_id: str) -> list:
-    """Añade contexto mínimo para que el LLM mantenga el tono."""
-    estado = GestorEstado.obtener_estado(session_id)
-    estado_txt = f"Estado actual del pedido: {json.dumps(estado, ensure_ascii=False)}"
+    """Añade contexto del catálogo y estado para que el LLM sea preciso y rápido."""
+    # Inyección de CATALOG RESOURCE (Los Ojos de la IA)
+    catalogo_txt = CatalogResource.get_catalog_text()
+    
+    # Inyección de CONTEXTO RESOURCE (La Memoria de la IA)
+    contexto_txt = ContextoResource.get_context_text(session_id)
     
     extra = f"\n\nInstrucciones: Eres Urban, un vendedor de helados relajado de Medellín. " \
-            f"No inventes precios. Si el usuario pregunta qué hay, dile que mire el catálogo. " \
+            f"No inventes precios. Usa el siguiente catálogo real para responder:\n" \
+            f"{catalogo_txt}\n\n" \
+            f"{contexto_txt}\n" \
             f"IMPORTANTE: Responde SOLO con texto natural, NUNCA uses formato JSON ni llaves {{}} en tu respuesta. " \
-            f"Mantén la charla corta.\n{estado_txt}"
+            f"Mantén la charla corta."
     
     enriquecido = []
     found_system = False
@@ -224,14 +271,12 @@ def responder_vendedor_json(historial: list, verbose: bool = False, session_id: 
     # 3. OTROS ATAJOS (Catálogo, Recomendación)
     intencion = detectar_intencion(msg_usuario)
     if intencion == "catalogo":
-        productos = obtener_catalogo_real()
-        sabores_disponibles = [p["sabor"] for p in productos if p.get("stock", 0) > 0]
-        lista_sabores = ", ".join(sabores_disponibles[:-1]) + " y " + sabores_disponibles[-1] if len(sabores_disponibles) > 1 else (sabores_disponibles[0] if sabores_disponibles else "nada por ahora")
-        
+        # Usar el texto formateado del RESOURCE para una respuesta rápida
+        mensaje_catalogo = CatalogResource.get_catalog_text()
         return json.dumps({
             "accion": "mostrar_productos",
-            "mensaje": f"¡Claro bro! Mirá, hoy tengo helado de {lista_sabores}. Todo está bien melo. ¿Cuál te provoca?",
-            "productos": productos
+            "mensaje": f"¡Claro bro! Mirá lo que tengo melo hoy:\n{mensaje_catalogo}\n¿Cuál te empaco?",
+            "productos": obtener_catalogo_real() # Mantenemos la tool solo para enviar la lista cruda si el UI la necesita
         }, ensure_ascii=False)
 
     # 4. FALLBACK AL LLM (Charla general)

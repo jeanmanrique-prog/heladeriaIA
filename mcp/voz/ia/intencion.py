@@ -1,3 +1,18 @@
+"""
+🎯 INTENCIÓN — EL TRADUCTOR DE DESEOS
+--------------------------------------
+Este archivo se encarga de convertir el lenguaje natural del usuario en 
+una "etiqueta" que el sistema pueda entender programáticamente.
+
+¿QUÉ HACE EXACTAMENTE?
+1. RECIBIR: Toma el texto que viene del transcriptor (STT).
+2. BUSCAR: Analiza mediante patrones (Regex) qué quiere el usuario.
+3. ETIQUETAR: Si el usuario dice "dame uno de fresa", este archivo dice: "Esto es un PEDIDO". 
+   Si dice "cuánto cuesta", dice: "Esto es una consulta de CATÁLOGO".
+
+FLUJO DESDE LA PERSPECTIVA DE LA INTENCIÓN:
+Texto Crudo -> Normalización -> Búsqueda de Palabras Clave -> Categoría Resultante.
+"""
 import re
 from ..procesamiento.normalizacion import normalizar_texto_base
 
