@@ -1,3 +1,24 @@
+"""
+🚦 GESTOR DE TURNOS — EL SEMÁFORO DE LA CHARLA
+----------------------------------------------
+En una conversación real, la gente se interrumpe. Este archivo controla que 
+Urban sepa callarse si el usuario empieza a hablar mientras él responde.
+
+¿QUÉ HACE EXACTAMENTE?
+1. CONTROL DE ESTADO: Sabe si la IA está hablando o si el usuario está hablando.
+2. INTERRUPCIÓN (Barge-in): Si tú hablas mientras Urban te responde, este archivo 
+   activa una señal para detener el sonido de la IA inmediatamente.
+3. FLUIDEZ: Asegura que el micrófono no intente grabar lo que la propia IA 
+   está diciendo por los parlantes.
+
+FLUJO DETALLADO POR ARCHIVO:
+1. DETECTAR: 'pipeline_voz.py' detecta que el usuario empezó a hablar.
+2. NOTIFICAR: El pipeline llama a este archivo ('turnos.py') para marcar el turno del usuario.
+3. INTERRUMPIR: Si la IA estaba hablando mediante 'tts.py', este archivo le envía una 
+   señal de cancelación inmediata para que Urban guarde silencio.
+4. LIBERAR: Cuando el usuario termina, el pipeline avisa a este archivo para que la 
+   IA pueda volver a pensar y responder.
+"""
 import threading
 
 class GestorTurnos:

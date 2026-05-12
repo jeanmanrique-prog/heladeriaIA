@@ -1,3 +1,16 @@
+"""
+🧹 NORMALIZACIÓN — EL LIMPIADOR DE TEXTO
+----------------------------------------
+Whisper no es perfecto. A veces escucha "presa" cuando dijiste "fresa". 
+Este archivo se encarga de corregir esos errores para que la IA no se confunda.
+
+FLUJO DESDE LA PERSPECTIVA DE LA NORMALIZACIÓN:
+1. RECIBIR: Toma el texto crudo enviado por 'stt.py'.
+2. LIMPIAR: Quita tildes, mayúsculas y puntos.
+3. CORREGIR: Usa REGLAS_CORRECCION para errores comunes.
+4. REFINAR: Usa el catálogo para corregir sabores mal escuchados.
+5. ENTREGAR: Envía la frase limpia a 'pipeline_voz.py' para ir al 'agente.py'.
+"""
 import re
 import unicodedata
 from rapidfuzz import fuzz

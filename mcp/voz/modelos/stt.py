@@ -1,3 +1,20 @@
+"""
+🔊 STT (Speech-To-Text) — EL TRADUCTOR DE SONIDO
+-----------------------------------------------
+Este archivo es el "traductor" que convierte las ondas de audio en palabras escritas.
+Utiliza **Whisper** (específicamente la versión optimizada 'faster-whisper').
+
+¿QUÉ ES WHISPER?
+Es una inteligencia artificial de OpenAI entrenada para entender el habla humana 
+en muchos idiomas. Aquí lo usamos para que Urban pueda "leer" lo que el cliente dice.
+
+FLUJO DESDE LA PERSPECTIVA DEL STT:
+1. RECIBIR: El 'pipeline_voz.py' le entrega el archivo de audio (.wav) desde 'buffer.py'.
+2. CARGAR: El motor Whisper se carga en memoria.
+3. TRANSCRIBIR: Convierte el audio en texto palabra por palabra.
+4. NORMALIZAR: Se envía el texto a 'normalizacion.py' para limpiar errores.
+5. ENTREGAR: Devuelve la frase limpia a 'pipeline_voz.py' para enviarla al 'agente.py'.
+"""
 import os
 import tempfile
 import unicodedata
@@ -21,24 +38,8 @@ def inicializar_transcriptor() -> bool:
     except Exception:
         return False
 
-def normalizar_texto(texto: str) -> str:
-    texto = (texto or "").strip().lower()
-    texto = unicodedata.normalize("NFKD", texto)
-    texto = "".join(ch for ch in texto if not unicodedata.combining(ch))
-    texto = re.sub(r"[^a-z0-9\s]", " ", texto)
-    texto = re.sub(r"\s+", " ", texto).strip()
-    if "presa" in texto:
-        texto = texto.replace("presa", "fresa")
-    return texto
-
-def _suffix_audio_desde_mime(audio_format: str | None) -> str:
-    formato = normalizar_texto(audio_format or "")
-    if "webm" in formato: return ".webm"
-    if "ogg" in formato or "opus" in formato: return ".ogg"
-    if "mpeg" in formato or "mp3" in formato: return ".mp3"
-    if "mp4" in formato or "m4a" in formato: return ".m4a"
-    if "wav" in formato: return ".wav"
-    return ".wav"
+    except Exception:
+        return False
 
 def transcribir_audio(
     audio_bytes: bytes,

@@ -1,3 +1,16 @@
+"""
+🗣️ TTS (Text-To-Speech) — LA VOZ DE URBAN
+------------------------------------------
+Este archivo convierte las respuestas de texto de la IA en sonido real. 
+Utiliza **Piper**, un motor de voz muy rápido que funciona sin internet.
+
+FLUJO DESDE LA PERSPECTIVA DEL TTS:
+1. RECIBIR: El 'pipeline_voz.py' le entrega el mensaje final desde 'agente.py'.
+2. LIMPIAR: Quita emojis y caracteres raros.
+3. CARGAR: El motor Piper carga el modelo de voz.
+4. SINTETIZAR: Convierte cada palabra en audio digital.
+5. REPRODUCIR: Envía el sonido a los parlantes.
+"""
 import io
 import os
 import re
