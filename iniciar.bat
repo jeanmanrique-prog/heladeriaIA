@@ -26,6 +26,8 @@ timeout /t 2 /nobreak > nul
 
 echo [5/5] Iniciando Frontend Streamlit...
 start "Frontend" cmd /k "streamlit run app/main.py"
+timeout /t 5 /nobreak > nul
+start http://localhost:8501
 
 echo ==========================================
 echo Sistema en marcha. 

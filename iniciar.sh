@@ -37,6 +37,14 @@ sleep 3
 
 echo "[5/5] Iniciando Frontend Streamlit..."
 streamlit run app/main.py --server.address 0.0.0.0 &
+sleep 5
+
+# Intentar abrir el navegador automáticamente (compatible con RPi y Linux)
+if command -v xdg-open > /dev/null; then
+    xdg-open http://localhost:8501 &
+elif command -v chromium-browser > /dev/null; then
+    chromium-browser http://localhost:8501 &
+fi
 
 echo "=========================================="
 echo "Sistema en marcha en tu Raspberry Pi."
