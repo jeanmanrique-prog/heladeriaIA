@@ -1,9 +1,21 @@
 """
-Servidor MCP — Heladería
-Expone las herramientas de la heladería como un servidor MCP estándar.
+🚀 SERVER MCP — EL EMBAJADOR DE HERRAMIENTAS
+--------------------------------------------
+Este es el archivo que "vende" las habilidades de tu heladería al mundo 
+exterior (como a Claude, ChatGPT o tu propio sistema de voz).
 
-Este archivo incluye una lógica para evitar el conflicto de nombres entre
-la carpeta local 'mcp/' y la librería externa 'mcp'.
+¿QUÉ HACE EXACTAMENTE?
+1. EXPONE FUNCIONES: Toma las herramientas de 'tools/' (vender, inventario, etc.) 
+   y las registra para que la IA sepa que puede usarlas.
+2. DEFINE REGLAS: Le explica a la IA qué datos necesita cada herramienta 
+   (ej. "para vender necesito el ID del producto y la cantidad").
+3. ESCUCHA PETICIONES: Se queda esperando a que alguien (un cliente o la IA) 
+   le pida ejecutar una de esas herramientas.
+
+EJEMPLO DE USO:
+Cuando Llama dice: "Voy a consultar el inventario para ver si hay fresa", 
+es este archivo el que recibe esa orden, llama a 'consultar_inventario_tool' 
+y le devuelve el resultado a la IA. Es el puente de comunicación oficial.
 """
 
 import sys
