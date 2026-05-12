@@ -1,14 +1,20 @@
-import sqlite3
+"""
+🛠️ CATALOG TOOLS — EL BUSCADOR DE PRODUCTOS
+-------------------------------------------
+Este archivo permite a la IA consultar qué hay disponible. 
+Está integrado con db_heladeria.py para garantizar que, si el servidor 
+principal falla (por mantenimiento o red), Urban siempre tenga acceso al catálogo 
+real. Esto es posible porque db_heladeria.py lee directamente el archivo de la 
+base de datos (.db) sin necesidad de internet ni de que el servidor esté encendido.
+"""
 import requests
-from pathlib import Path
 from mcp.config import API_URL
-
-_DB_PATH = Path(__file__).resolve().parent.parent.parent / "db" / "heladeria.db"
+from mcp.voz.ia.db_heladeria import obtener_catalogo
 
 def obtener_catalogo_real() -> list:
     """
     TOOL: Obtiene el catálogo completo de productos con stock y precios.
-    Prioriza API, con fallback a SQLite.
+    Prioriza API, con fallback centralizado a db_heladeria.py.
     """
     # 1. Intentar via API
     try:
@@ -19,21 +25,5 @@ def obtener_catalogo_real() -> list:
     except:
         pass
 
-    # 2. Fallback a SQLite
-    try:
-        con = sqlite3.connect(str(_DB_PATH))
-        con.row_factory = sqlite3.Row
-        cur = con.cursor()
-        cur.execute("""
-            SELECT p.id_producto, p.nombre_producto, p.precio_unitario, 
-                   s.nombre AS sabor, COALESCE(i.cantidad_unidades, 0) AS stock
-            FROM productos p
-            JOIN sabores s ON s.id_sabor = p.id_sabor
-            LEFT JOIN inventario i ON i.id_producto = p.id_producto
-            WHERE p.activo = 1
-        """)
-        rows = [dict(r) for r in cur.fetchall()]
-        con.close()
-        return rows
-    except:
-        return []
+    # 2. Fallback Centralizado (Usa db_heladeria.py)
+    return obtener_catalogo()
