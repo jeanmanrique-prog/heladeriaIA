@@ -211,7 +211,8 @@ Debes ver, como minimo:
 - `voz_es.onnx`
 - `voz_es.onnx.json`
 - `requirements.txt`
-- `iniciar.bat`
+- `iniciar.bat` (Para Windows)
+- `iniciar.sh` (Para Raspberry Pi)
 - carpeta `app`
 - carpeta `api`
 - carpeta `mcp`
@@ -227,46 +228,38 @@ Si `db/heladeria.db` no existe, puedes generarla con:
 python db/database.py
 ```
 
-## Paso 7. Iniciar los servicios
+## Paso 7. Cómo iniciar el sistema
 
-Abre varias terminales dentro de la carpeta del proyecto. En cada terminal ejecuta primero:
+Hemos simplificado el arranque para que no tengas que abrir múltiples terminales.
 
-```bash
-cd ~/heladeriaIA
-source .venv/bin/activate
-```
+### A. La primera vez (Configuración única)
+Antes de arrancar por primera vez, asegúrate de preparar el entorno:
 
-### Terminal 1: Ollama
+1. **Dar permisos al script:**
+   ```bash
+   chmod +x iniciar.sh
+   ```
+2. **Crear la base de datos (opcional):** Si no ves el archivo `db/heladeria.db`, genéralo con:
+   ```bash
+   python3 db/database.py
+   ```
+3. **Descargar el modelo en Ollama:**
+   ```bash
+   ollama pull llama3.2:1b
+   ```
 
-```bash
-ollama serve
-```
+### B. Siguientes veces (Uso diario)
+Para el día a día, solo necesitas un comando:
 
-### Terminal 2: API FastAPI
+1. Asegúrate de que Ollama esté activo (`ollama serve`).
+2. Inicia todo el sistema Urban:
+   ```bash
+   ./iniciar.sh
+   ```
 
-```bash
-python -m uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload
-```
+*Para detener todos los servicios a la vez, simplemente pulsa `Ctrl+C` en la terminal donde ejecutaste el script.*
 
-### Terminal 3: Servidor MCP
-
-```bash
-python mcp/server.py
-```
-
-### Terminal 4: Pipeline local de voz
-
-```bash
-python -m mcp.voz.pipeline.pipeline_voz
-```
-
-### Terminal 5: Frontend Streamlit
-
-```bash
-streamlit run app/main.py
-```
-
-## Paso 8. Abrir la aplicacion
+## Paso 8. Abrir la aplicación
 
 Cuando Streamlit inicie, abre en el navegador de la Raspberry:
 
@@ -362,7 +355,7 @@ Se usa `SQLite` para:
 - Si cambias la IP o separas servicios en varias maquinas, debes actualizar las URLs locales definidas en:
   - `mcp/config.py`
   - `app/utils/peticiones.py`
-- El archivo `iniciar.bat` es para Windows. En Raspberry Pi el arranque recomendado es manual por terminales.
+- El archivo `iniciar.bat` es para Windows. En Raspberry Pi el arranque recomendado es usar `./iniciar.sh`.
 
 ## Equipo
 
