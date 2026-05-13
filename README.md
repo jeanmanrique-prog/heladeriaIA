@@ -71,13 +71,13 @@ Antes de iniciar, confirma lo siguiente:
 Ubica el proyecto en una ruta simple, por ejemplo:
 
 ```bash
-/home/pi/heladeriaIA
+/home/pi/heladeria
 ```
 
 o
 
 ```bash
-/home/<tu_usuario>/heladeriaIA
+/home/<tu_usuario>/heladeria
 ```
 
 ## Instalacion completa en Raspberry Pi 4 con Raspberry Pi OS
@@ -116,7 +116,7 @@ Estas dependencias cubren:
 #### Opcion A. Con memoria USB
 
 1. Apaga o desmonta correctamente la memoria USB en el computador donde tienes la carpeta.
-2. Copia la carpeta completa `heladeriaIA` dentro de la memoria.
+2. Copia la carpeta completa `heladeria` dentro de la memoria.
 3. Inserta la memoria en la Raspberry Pi.
 4. Verifica si el sistema la monto automaticamente:
 
@@ -134,13 +134,13 @@ sudo mount /dev/sda1 /mnt/usb
 6. Copia el proyecto al home del usuario:
 
 ```bash
-cp -r /mnt/usb/heladeriaIA ~/heladeriaIA
+cp -r /mnt/usb/heladeria ~/heladeria
 ```
 
 7. Entra al proyecto:
 
 ```bash
-cd ~/heladeriaIA
+cd ~/heladeria
 ```
 
 #### Opcion B. Sin memoria USB
@@ -150,8 +150,8 @@ Puedes hacerlo de cualquiera de estas formas:
 ##### Forma 1. Clonar desde GitHub
 
 ```bash
-git clone https://github.com/jeanmanrique-prog/heladeriaIA.git
-cd heladeriaIA
+git clone https://github.com/jeanmanrique-prog/heladeriaIA.git heladeria
+cd heladeria
 ```
 
 ##### Forma 2. Copiar por red con `scp`
@@ -159,13 +159,13 @@ cd heladeriaIA
 Ejecuta esto desde tu computador, no desde la Raspberry:
 
 ```bash
-scp -r ./heladeriaIA <usuario_raspberry>@<ip_raspberry>:/home/<usuario_raspberry>/
+scp -r ./heladeria <usuario_raspberry>@<ip_raspberry>:/home/<usuario_raspberry>/
 ```
 
 Luego, en la Raspberry:
 
 ```bash
-cd /home/<usuario_raspberry>/heladeriaIA
+cd /home/<usuario_raspberry>/heladeria
 ```
 
 ### Paso 4. Crear y activar el entorno virtual
