@@ -207,11 +207,16 @@ def verificar_ollama() -> tuple[bool, str]:
 # ──────────────────────────────────────────────────────────
 
 def _enriquecer_historial(historial: list, session_id: str) -> list:
-    """Añade contexto del catálogo y estado para que el LLM sea preciso y rápido."""
-    # Inyección de CATALOG RESOURCE (Los Ojos de la IA)
+    """
+    Añade contexto del catálogo y estado para que el LLM sea preciso y rápido.
+    Aquí es donde ocurre la INYECCIÓN AUTOMÁTICA de recursos antes de cada respuesta.
+    """
+    # 1. INYECCIÓN AUTOMÁTICA DEL CATÁLOGO:
+    # Se consulta el recurso para que la IA siempre tenga los precios actualizados.
     catalogo_txt = CatalogResource.get_catalog_text()
     
-    # Inyección de CONTEXTO RESOURCE (La Memoria de la IA)
+    # 2. INYECCIÓN AUTOMÁTICA DEL CONTEXTO:
+    # Se recupera el estado de la sesión (qué ha pedido el usuario) para evitar olvidos.
     contexto_txt = ContextoResource.get_context_text(session_id)
     
     extra = f"\n\nInstrucciones: Eres Urban, un vendedor de helados relajado de Medellín. " \
@@ -271,7 +276,8 @@ def responder_vendedor_json(historial: list, verbose: bool = False, session_id: 
     # 3. OTROS ATAJOS (Catálogo, Recomendación)
     intencion = detectar_intencion(msg_usuario)
     if intencion == "catalogo":
-        # Usar el texto formateado del RESOURCE para una respuesta rápida
+        # INYECCIÓN BAJO DEMANDA: Si el usuario pide el catálogo, 
+        # ejecutamos el recurso para generar la respuesta formateada inmediata.
         mensaje_catalogo = CatalogResource.get_catalog_text()
         return json.dumps({
             "accion": "mostrar_productos",
