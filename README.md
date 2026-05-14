@@ -77,7 +77,7 @@ Ubica el proyecto en una ruta simple, por ejemplo:
 o
 
 ```bash
-/home/<tu_usuario>/heladeria
+~/heladeria
 ```
 
 ## Instalacion completa en Raspberry Pi 4 con Raspberry Pi OS
@@ -99,7 +99,7 @@ sudo apt full-upgrade -y
 ### Paso 2. Instalar dependencias del sistema
 
 ```bash
-sudo apt install -y git curl ffmpeg sqlite3 alsa-utils python3 python3-pip python3-venv build-essential portaudio19-dev libportaudio2 libatlas-base-dev libopenblas-dev
+sudo apt install -y git curl ffmpeg sqlite3 alsa-utils python3 python3-pip python3-venv build-essential portaudio19-dev libportaudio2 libopenblas-dev libblas-dev liblapack-dev
 ```
 
 Estas dependencias cubren:
@@ -156,16 +156,16 @@ cd heladeria
 
 ##### Forma 2. Copiar por red con `scp`
 
-Ejecuta esto desde tu computador, no desde la Raspberry:
+Ejecuta esto desde tu computador (reemplaza los datos de la Raspberry):
 
 ```bash
-scp -r ./heladeria <usuario_raspberry>@<ip_raspberry>:/home/<usuario_raspberry>/
+scp -r ./heladeria usuario@ip_raspberry:~/
 ```
 
 Luego, en la Raspberry:
 
 ```bash
-cd /home/<usuario_raspberry>/heladeria
+cd ~/heladeria
 ```
 
 ### Paso 4. Crear y activar el entorno virtual
@@ -247,6 +247,29 @@ Antes de arrancar por primera vez, asegúrate de preparar el entorno:
    ```bash
    ollama pull llama3.2:1b
    ```
+
+### 💡 Notas de nuestra primera instalación (Lecciones aprendidas)
+
+Durante nuestra primera puesta en marcha, documentamos estos puntos clave para ahorrar tiempo:
+
+1. **Dependencias de Sistema (Linux/WSL/Raspberry):** 
+   - El paquete `libatlas-base-dev` fallaba en versiones nuevas de Linux (como Ubuntu 24.04 o Debian 12). 
+   - **Solución:** Lo reemplazamos por `libopenblas-dev libblas-dev liblapack-dev`, que es más moderno y compatible. El comando del **Paso 2** ya tiene esta corrección.
+
+2. **Navegación en la Terminal:**
+   - Intentar usar rutas como `/home/<usuario>/` con corchetes suele dar errores en la terminal.
+   - **Solución:** Usa siempre `cd ~/heladeria`. El símbolo `~` te lleva automáticamente a tu carpeta personal, sin importar cómo se llame tu usuario.
+
+3. **Transferencia de archivos (El método confiable):**
+   - Asegúrate de copiar la carpeta completa y luego entrar a ella antes de intentar instalar los `requirements.txt`.
+
+4. **Conflictos de nombres con la librería `mcp`:**
+   - Como nuestra carpeta local se llama `mcp/`, choca con la librería oficial instalada por `pip`.
+   - **Solución implementada:** Si solo necesitas correr la interfaz de Streamlit y el pipeline de Voz local, desinstala la librería oficial para evitar el error de módulo no encontrado:
+     ```bash
+     pip uninstall mcp -y
+     ```
+   - *Nota: Si deseas usar el servidor MCP (`mcp/server.py`) para interactuar con IAs externas como Claude, deberás renombrar la carpeta local para no perder la librería oficial.*
 
 ### B. Siguientes veces (Uso diario)
 Para el día a día, solo necesitas un comando:
