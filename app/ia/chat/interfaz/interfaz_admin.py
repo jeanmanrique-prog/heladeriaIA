@@ -22,7 +22,7 @@ def render_pagina_chat_admin(api_ok: bool, theme: dict):
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_img:
-        _render_urban_image("urban_stock.png", theme['BG'])
+        _render_urban_image("urban_chateando.png", theme['BG'])
 
 def _render_urban_image(img_name: str, bg_color: str):
     root_dir = Path(__file__).resolve().parent.parent.parent.parent.parent

@@ -116,7 +116,7 @@ def _render_item_card(item: dict, theme: dict):
 
 def _render_producto_img_markup(sabor: str, theme: dict) -> str:
     root_dir = Path(__file__).resolve().parent.parent.parent.parent
-    path = root_dir / "imagenes" / f"{sabor}-oscuro.png"
+    path = root_dir / "imagenes" / f"{sabor}.png"
 
     if path.exists():
         img_b64 = base64.b64encode(path.read_bytes()).decode()
