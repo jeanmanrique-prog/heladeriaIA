@@ -19,6 +19,9 @@ else
     echo "⚠️  ADVERTENCIA: No se encontró entorno virtual. Usando Python del sistema."
 fi
 
+# Asegurar que el directorio actual sea la raíz para las importaciones
+export PYTHONPATH=$PYTHONPATH:.
+
 # Función para limpiar procesos al salir
 trap "kill 0" EXIT
 
