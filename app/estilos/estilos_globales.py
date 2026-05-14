@@ -11,7 +11,7 @@ def obtener_estilos_globales():
     @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
 
     /* OCULTAR BARRA SUPERIOR Y MENÚS */
-    header[data-testid="stHeader"] { visibility: hidden; height: 0; }
+    header[data-testid="stHeader"] { background-color: transparent !important; }
     footer { visibility: hidden; }
     #MainMenu { visibility: hidden; }
     .stAppDeployButton { display:none; }
