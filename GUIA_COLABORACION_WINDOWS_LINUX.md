@@ -252,7 +252,7 @@ cd ~/heladeriaIA
 
 ```bash
 sudo apt update
-sudo apt install -y git curl ffmpeg sqlite3 python3 python3-pip python3-venv build-essential portaudio19-dev libportaudio2 libatlas-base-dev libopenblas-dev
+sudo apt install -y git curl ffmpeg sqlite3 python3 python3-pip python3-venv build-essential portaudio19-dev libportaudio2 libopenblas-dev libblas-dev liblapack-dev
 ```
 
 ## Paso 3. Crear el entorno virtual
