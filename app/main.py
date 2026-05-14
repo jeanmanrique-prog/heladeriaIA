@@ -1,8 +1,7 @@
-"""
-app/main.py
-───────────
-Router principal de la aplicación Gelateria Urbana.
-"""
+# app/main.py
+# ───────────
+# Router principal de la aplicación Gelateria Urbana.
+
 
 import streamlit as st
 import base64
@@ -12,7 +11,7 @@ from pathlib import Path
 # Agregar el directorio raíz al path para que reconozca los módulos de mcp/
 root_path = str(Path(__file__).resolve().parent.parent)
 if root_path not in sys.path:
-    sys.path.append(root_path)
+    sys.path.insert(0, root_path)
 
 import importlib
 try:
